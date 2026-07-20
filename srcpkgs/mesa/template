@@ -1,7 +1,7 @@
 # Template file for 'mesa'
 pkgname=mesa
 version=26.1.5
-revision=1.ps4
+revision=2.ps4
 build_style=meson
 build_helper="qemu"
 _llvmver=21
