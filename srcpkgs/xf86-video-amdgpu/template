@@ -1,7 +1,7 @@
 # Template file for 'xf86-video-amdgpu'
 pkgname=xf86-video-amdgpu
 version=23.0.0
-revision=2.ps4
+revision=2
 build_style=gnu-configure
 hostmakedepends="pkg-config"
 makedepends="xorgproto eudev-libudev-devel libpciaccess-devel libdrm-devel
