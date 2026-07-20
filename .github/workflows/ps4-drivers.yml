@@ -1,4 +1,4 @@
-name: Build PS4 Drivers
+name: Build PS4 Void Drivers
 
 on:
   workflow_dispatch:
@@ -8,22 +8,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout overlay
+      - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          path: overlay
 
-      - name: Clone void-packages
+      - name: Clone Void packages
         run: |
-          git clone --depth=1 https://github.com/void-linux/void-packages.git
+          git clone --depth=1 https://github.com/void-linux/void-packages.git void-packages
 
-      - name: Copy PS4 patches
+      - name: Apply PS4 patches
         run: |
-          cp -r overlay/srcpkgs/libdrm void-packages/srcpkgs/
-          cp -r overlay/srcpkgs/mesa void-packages/srcpkgs/
-          cp -r overlay/srcpkgs/xf86-video-amdgpu void-packages/srcpkgs/
+          mkdir -p void-packages/srcpkgs/libdrm/patches
+          mkdir -p void-packages/srcpkgs/mesa/patches
+          mkdir -p void-packages/srcpkgs/xf86-video-amdgpu/patches
 
-      - name: Build Void packages
+          cp patches/libdrm-liverpool.patch \
+            void-packages/srcpkgs/libdrm/patches/
+
+          cp patches/mesa-liverpool.patch \
+            void-packages/srcpkgs/mesa/patches/
+
+          cp patches/xf86-video-amdgpu-liverpool.patch \
+            void-packages/srcpkgs/xf86-video-amdgpu/patches/
+
+      - name: Build packages
         run: |
           docker run --rm \
             --privileged \
@@ -33,33 +40,64 @@ jobs:
 
               set -e
 
-              echo "=== Updating xbps ==="
+              echo "=== Create xbuilder ==="
+
+              adduser -D -u 1000 xbuilder || true
+
+              echo "=== Update XBPS ==="
+
               xbps-install -Syu xbps
 
-              echo "=== Check tools ==="
-              id
-              ls /bin/xbps-src || true
-              ls /void-packages
+              echo "=== Check ==="
+
+              id xbuilder
+              ls -la /void-packages/xbps-src
+
+              chmod +x /void-packages/xbps-src
+
 
               echo "=== Permissions ==="
+
               chown -R xbuilder:xbuilder /void-packages
 
-              echo "=== Config ==="
-              echo "XBPS_CHROOT_CMD=xbps-uchroot" > /void-packages/etc/conf
 
-              echo "=== Build as xbuilder ==="
+              echo "=== Config ==="
+
+              echo "XBPS_CHROOT_CMD=xbps-uchroot" \
+                > /void-packages/etc/conf
+
+
+              echo "=== Bootstrap ==="
 
               cd /void-packages
 
-              su-exec xbuilder ./xbps-src binary-bootstrap
-              su-exec xbuilder ./xbps-src pkg libdrm
-              su-exec xbuilder ./xbps-src pkg xf86-video-amdgpu
-              su-exec xbuilder ./xbps-src pkg mesa
+              su xbuilder -c "./xbps-src binary-bootstrap"
+
+
+              echo "=== Build libdrm ==="
+
+              su xbuilder -c "./xbps-src pkg libdrm"
+
+
+              echo "=== Build xf86-video-amdgpu ==="
+
+              su xbuilder -c "./xbps-src pkg xf86-video-amdgpu"
+
+
+              echo "=== Build mesa ==="
+
+              su xbuilder -c "./xbps-src pkg mesa"
+
+
+              echo "=== Done ==="
+
+              ls -lah /void-packages/hostdir/binpkgs
 
             '
 
-      - name: Upload packages
+      - name: Upload XBPS packages
         uses: actions/upload-artifact@v4
         with:
-          name: ps4-drivers
-          path: void-packages/hostdir/binpkgs/**/*.xbps
+          name: ps4-void-drivers
+          path: |
+            void-packages/hostdir/binpkgs/*.xbps
