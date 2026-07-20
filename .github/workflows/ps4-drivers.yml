@@ -1,13 +1,28 @@
-name: Inspect xbps-src image
+name: Check users
 
 on:
   workflow_dispatch:
 
 jobs:
-  inspect:
+  check:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check container users
+        run: |
+          docker run --rm \
+            ghcr.io/void-linux/xbps-src-masterdir:latest-x86_64 \
+            sh -c '
+              echo "=== passwd ==="
+              cat /etc/passwd
+
+              echo "=== groups ==="
+              cat /etc/group
+
+              echo "=== xbps-src ==="
+              ls -l /usr/bin/xbps-src /bin/xbps-src 2>/dev/null || true
+            '
+
       - name: Inspect container
         run: |
           docker run --rm \
