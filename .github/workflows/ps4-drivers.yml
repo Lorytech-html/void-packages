@@ -28,7 +28,7 @@ jobs:
         run: |
           cd void-packages
           mkdir -p etc
-          echo "XBPS_CHROOT_CMD=ethereal" > etc/conf
+          echo "XBPS_CHROOT_CMD=uchroot" > etc/conf
           cat etc/conf
 
       - name: Build Void packages
@@ -47,7 +47,7 @@ jobs:
               xbps-install -Suy
 
               echo "Installing base tools..."
-              xbps-install -y shadow git bash tar curl ethereal
+              xbps-install -y shadow git bash tar curl
 
               echo "Creating builder user..."
               useradd -m builder
@@ -55,24 +55,20 @@ jobs:
               echo "Fixing permissions..."
               chown -R builder:builder /void-packages
 
-              echo "Setting ethereal..."
-              echo "XBPS_CHROOT_CMD=ethereal" > /void-packages/etc/conf
+              echo "Setting chroot method..."
+              echo "XBPS_CHROOT_CMD=uchroot" > /void-packages/etc/conf
 
-              echo "Starting build as builder..."
+              echo "Starting build..."
 
               su - builder -c "
                 cd /void-packages
 
-                echo Bootstrap...
                 ./xbps-src binary-bootstrap
 
-                echo Building libdrm...
                 ./xbps-src pkg libdrm
 
-                echo Building xf86-video-amdgpu...
                 ./xbps-src pkg xf86-video-amdgpu
 
-                echo Building mesa...
                 ./xbps-src pkg mesa
               "
             '
