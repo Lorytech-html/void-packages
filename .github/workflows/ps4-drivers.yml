@@ -1,0 +1,17 @@
+name: build-ps4-drivers
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/void-linux/void-glibc-full
+    steps:
+      - uses: actions/checkout@v4
+      - run: xbps-install -Suy xbps
+      - run: ./xbps-src binary-bootstrap
+      - run: ./xbps-src pkg libdrm
+      - run: ./xbps-src pkg xf86-video-amdgpu
+      - run: ./xbps-src pkg mesa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ps4-drivers
+          path: hostdir/binpkgs/*.xbps
