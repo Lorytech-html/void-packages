@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout overlay repo
         uses: actions/checkout@v4
         with:
@@ -17,13 +18,13 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/void-linux/void-packages.git
 
-      - name: Copy PS4 patches and templates
+      - name: Copy PS4 package templates and patches
         run: |
           cp -r overlay/srcpkgs/libdrm void-packages/srcpkgs/
           cp -r overlay/srcpkgs/mesa void-packages/srcpkgs/
           cp -r overlay/srcpkgs/xf86-video-amdgpu void-packages/srcpkgs/
 
-      - name: Prepare xbps-src config
+      - name: Configure xbps-src
         run: |
           cd void-packages
           mkdir -p etc
@@ -39,31 +40,33 @@ jobs:
             bash -c '
               set -e
 
+              echo "Installing base tools..."
+              xbps-install -Sy shadow git bash tar curl ethereal
+
               echo "Creating builder user..."
               useradd -m builder
 
               echo "Fixing permissions..."
               chown -R builder:builder /void-packages
 
-              echo "Installing required tools..."
-              xbps-install -Sy git bash tar curl ethereal
-
-              echo "Forcing ethereal..."
+              echo "Setting ethereal..."
               echo "XBPS_CHROOT_CMD=ethereal" > /void-packages/etc/conf
+
+              echo "Starting build as builder..."
 
               su - builder -c "
                 cd /void-packages
 
-                echo Starting bootstrap...
+                echo Bootstrap...
                 ./xbps-src binary-bootstrap
 
-                echo Building libdrm...
+                echo Build libdrm...
                 ./xbps-src pkg libdrm
 
-                echo Building xf86-video-amdgpu...
+                echo Build xf86-video-amdgpu...
                 ./xbps-src pkg xf86-video-amdgpu
 
-                echo Building mesa...
+                echo Build mesa...
                 ./xbps-src pkg mesa
               "
             '
