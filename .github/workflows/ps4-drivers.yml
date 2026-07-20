@@ -1,13 +1,57 @@
-name: Build PS4 Drivers
+name: Inspect xbps-src image
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  inspect:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Inspect container
+        run: |
+          docker run --rm \
+            ghcr.io/void-linux/xbps-src-masterdir:latest-x86_64 \
+            sh -c '
+              echo "=== SHELL ==="
+              echo $SHELL
+
+              echo "=== PATH ==="
+              echo $PATH
+
+              echo "=== ROOT FILES ==="
+              ls /
+
+              echo "=== BIN ==="
+              ls /bin || true
+
+              echo "=== USR BIN CHECK ==="
+              ls /usr/bin | head -100
+
+              echo "=== COMMANDS ==="
+              which sh || true
+              which bash || true
+              which xbps-src || true
+              which xbps-install || true
+              which useradd || true
+              which su || true
+
+              echo "=== XBPS PACKAGES ==="
+              xbps-query -l | head -100 || true
+            '
+
+      - name: Inspect Void image
+        run: |
+          docker run --rm \
+            ghcr.io/void-linux/xbps-src-masterdir:latest-x86_64 \
+            sh -c '
+              echo PATH=$PATH
+              ls /
+              which sh || true
+              which bash || true
+              which xbps-src || true
+              ls /bin || true
+            '
 
       - name: Checkout overlay repo
         uses: actions/checkout@v4
