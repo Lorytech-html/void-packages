@@ -1,59 +1,80 @@
-name: build-ps4-drivers
+name: Build PS4 Drivers
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout del tuo fork (contiene patch e template)
         uses: actions/checkout@v4
+        with:
+          path: custom
 
-      - name: Install host dependencies
+      - name: Installa dipendenze host
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bash \
-            curl \
-            wget \
-            git \
-            xz-utils \
-            tar \
-            bzip2 \
-            file \
-            bubblewrap \
-            libarchive-tools
+            git bash curl tar xz-utils \
+            bubblewrap wget file
 
-      - name: Install xbps-static
+      - name: Clona void-packages ufficiale
         run: |
-          mkdir -p "$HOME/xbps"
-          cd "$HOME/xbps"
-          wget https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
-          tar -xf xbps-static-latest.x86_64-musl.tar.xz
-          echo "$HOME/xbps/usr/bin" >> $GITHUB_PATH
+          git clone --depth=1 https://github.com/void-linux/void-packages.git
 
-      - name: Configure xbps-src
+      - name: Copia patch e template modificati
         run: |
-          echo 'XBPS_CHROOT_CMD=bwrap' >> etc/conf
+          cp custom/srcpkgs/libdrm/template \
+             void-packages/srcpkgs/libdrm/
+
+          cp custom/srcpkgs/mesa/template \
+             void-packages/srcpkgs/mesa/
+
+          cp custom/srcpkgs/xf86-video-amdgpu/template \
+             void-packages/srcpkgs/xf86-video-amdgpu/
+
+          mkdir -p void-packages/srcpkgs/libdrm/patches
+          mkdir -p void-packages/srcpkgs/mesa/patches
+          mkdir -p void-packages/srcpkgs/xf86-video-amdgpu/patches
+
+          cp custom/srcpkgs/libdrm/patches/* \
+             void-packages/srcpkgs/libdrm/patches/
+
+          cp custom/srcpkgs/mesa/patches/* \
+             void-packages/srcpkgs/mesa/patches/
+
+          cp custom/srcpkgs/xf86-video-amdgpu/patches/* \
+             void-packages/srcpkgs/xf86-video-amdgpu/patches/
 
       - name: Bootstrap
+        working-directory: void-packages
         run: |
-          chmod +x xbps-src
           ./xbps-src binary-bootstrap
 
       - name: Build libdrm
-        run: ./xbps-src pkg libdrm
+        working-directory: void-packages
+        run: ./xbps-src -Q pkg libdrm
 
       - name: Build xf86-video-amdgpu
-        run: ./xbps-src pkg xf86-video-amdgpu
+        working-directory: void-packages
+        run: ./xbps-src -Q pkg xf86-video-amdgpu
 
       - name: Build mesa
-        run: ./xbps-src pkg mesa
+        working-directory: void-packages
+        run: ./xbps-src -Q pkg mesa
 
-      - name: Upload packages
+      - name: Raccogli i pacchetti
+        run: |
+          mkdir output
+          find void-packages/hostdir/binpkgs \
+            -name "*.xbps" -exec cp {} output/ \;
+
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ps4-drivers
-          path: hostdir/binpkgs/**/*.xbps
+          path: output/
