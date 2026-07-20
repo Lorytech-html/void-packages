@@ -1,17 +1,39 @@
 name: build-ps4-drivers
 on: workflow_dispatch
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/void-linux/void-glibc-full
+    container:
+      image: ghcr.io/void-linux/void-glibc-full
+      options: --privileged
+
     steps:
+      - name: Prepare container
+        run: |
+          xbps-install -Syu xbps
+          xbps-install -yu
+          xbps-install -y sudo bash git curl
+          useradd -m builder
+
       - uses: actions/checkout@v4
-      - run: xbps-install -Suy xbps
-      - run: ./xbps-src binary-bootstrap
-      - run: ./xbps-src pkg libdrm
-      - run: ./xbps-src pkg xf86-video-amdgpu
-      - run: ./xbps-src pkg mesa
+
+      - name: Fix ownership
+        run: chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Bootstrap
+        run: sudo -Hu builder ./xbps-src binary-bootstrap
+
+      - name: Build libdrm
+        run: sudo -Hu builder ./xbps-src pkg libdrm
+
+      - name: Build xf86-video-amdgpu
+        run: sudo -Hu builder ./xbps-src pkg xf86-video-amdgpu
+
+      - name: Build mesa
+        run: sudo -Hu builder ./xbps-src pkg mesa
+
       - uses: actions/upload-artifact@v4
         with:
           name: ps4-drivers
-          path: hostdir/binpkgs/*.xbps
+          path: hostdir/binpkgs/**/*.xbps
