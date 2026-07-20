@@ -18,7 +18,7 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/void-linux/void-packages.git
 
-      - name: Copy PS4 package templates and patches
+      - name: Copy PS4 patches
         run: |
           cp -r overlay/srcpkgs/libdrm void-packages/srcpkgs/
           cp -r overlay/srcpkgs/mesa void-packages/srcpkgs/
@@ -31,37 +31,38 @@ jobs:
           echo "XBPS_CHROOT_CMD=uchroot" > etc/conf
           cat etc/conf
 
-      - name: Build Void packages
+      - name: Build packages
         run: |
           docker run --rm \
             --privileged \
             -v "$PWD/void-packages:/void-packages" \
-            ghcr.io/void-linux/xbps-src-masterdir:latest-x86_64 \
+            ghcr.io/void-linux/void-linux:latest-full-x86_64 \
             bash -c '
+
               set -e
 
-              echo "Updating xbps..."
+              echo "Update XBPS"
               xbps-install -Suy xbps
 
-              echo "Updating system..."
+              echo "Update system"
               xbps-install -Suy
 
-              echo "Installing base tools..."
-              xbps-install -y shadow git bash tar curl
+              echo "Install tools"
+              xbps-install -y git bash tar curl shadow util-linux
 
-              echo "Creating builder user..."
+              echo "Create builder"
               useradd -m builder
 
-              echo "Fixing permissions..."
+              echo "Permissions"
               chown -R builder:builder /void-packages
 
-              echo "Setting chroot method..."
-              echo "XBPS_CHROOT_CMD=uchroot" > /void-packages/etc/conf
+              echo "Build as builder"
 
-              echo "Starting build..."
-
-              su - builder -c "
+              runuser -u builder -- bash -c "
                 cd /void-packages
+
+                echo Config:
+                cat etc/conf
 
                 ./xbps-src binary-bootstrap
 
@@ -73,7 +74,7 @@ jobs:
               "
             '
 
-      - name: Upload PS4 driver packages
+      - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: ps4-drivers
