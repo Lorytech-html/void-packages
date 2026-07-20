@@ -2,79 +2,70 @@ name: Build PS4 Drivers
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    container:
+      image: ghcr.io/void-linux/xbps-src-masterdir:latest-x86_64
+      options: --privileged
+
     steps:
-      - name: Checkout del tuo fork (contiene patch e template)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          path: custom
+          path: overlay
 
-      - name: Installa dipendenze host
+      - name: Update container
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git bash curl tar xz-utils \
-            bubblewrap wget file
+          xbps-install -Syu
+          xbps-install -y git bash
 
-      - name: Clona void-packages ufficiale
+      - name: Clone official void-packages
         run: |
           git clone --depth=1 https://github.com/void-linux/void-packages.git
 
-      - name: Copia patch e template modificati
+      - name: Overlay PS4 patches
         run: |
-          cp custom/srcpkgs/libdrm/template \
+          cp overlay/srcpkgs/libdrm/template \
              void-packages/srcpkgs/libdrm/
 
-          cp custom/srcpkgs/mesa/template \
+          cp overlay/srcpkgs/mesa/template \
              void-packages/srcpkgs/mesa/
 
-          cp custom/srcpkgs/xf86-video-amdgpu/template \
+          cp overlay/srcpkgs/xf86-video-amdgpu/template \
              void-packages/srcpkgs/xf86-video-amdgpu/
 
           mkdir -p void-packages/srcpkgs/libdrm/patches
           mkdir -p void-packages/srcpkgs/mesa/patches
           mkdir -p void-packages/srcpkgs/xf86-video-amdgpu/patches
 
-          cp custom/srcpkgs/libdrm/patches/* \
+          cp overlay/srcpkgs/libdrm/patches/* \
              void-packages/srcpkgs/libdrm/patches/
 
-          cp custom/srcpkgs/mesa/patches/* \
+          cp overlay/srcpkgs/mesa/patches/* \
              void-packages/srcpkgs/mesa/patches/
 
-          cp custom/srcpkgs/xf86-video-amdgpu/patches/* \
+          cp overlay/srcpkgs/xf86-video-amdgpu/patches/* \
              void-packages/srcpkgs/xf86-video-amdgpu/patches/
 
       - name: Bootstrap
         working-directory: void-packages
-        run: |
-          ./xbps-src binary-bootstrap
+        run: ./xbps-src binary-bootstrap
 
       - name: Build libdrm
         working-directory: void-packages
-        run: ./xbps-src -Q pkg libdrm
+        run: ./xbps-src pkg libdrm
 
       - name: Build xf86-video-amdgpu
         working-directory: void-packages
-        run: ./xbps-src -Q pkg xf86-video-amdgpu
+        run: ./xbps-src pkg xf86-video-amdgpu
 
       - name: Build mesa
         working-directory: void-packages
-        run: ./xbps-src -Q pkg mesa
+        run: ./xbps-src pkg mesa
 
-      - name: Raccogli i pacchetti
-        run: |
-          mkdir output
-          find void-packages/hostdir/binpkgs \
-            -name "*.xbps" -exec cp {} output/ \;
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ps4-drivers
-          path: output/
+          path: void-packages/hostdir/binpkgs/**/*.xbps
