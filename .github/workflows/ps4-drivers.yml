@@ -7,28 +7,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    container:
-      image: ghcr.io/void-linux/void-glibc-full:latest
-
-    defaults:
-      run:
-        shell: bash
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug
+      - name: Install host dependencies
         run: |
-          pwd
-          ls -la
-          ls -la xbps-src || true
-          file xbps-src || true
+          sudo apt-get update
+          sudo apt-get install -y \
+            bash \
+            curl \
+            wget \
+            git \
+            xz-utils \
+            tar \
+            bzip2 \
+            file \
+            bubblewrap \
+            libarchive-tools
 
-      - name: Update xbps
+      - name: Install xbps-static
         run: |
-          xbps-install -Syu
-          xbps-install -y bash git curl
+          mkdir -p "$HOME/xbps"
+          cd "$HOME/xbps"
+          wget https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
+          tar -xf xbps-static-latest.x86_64-musl.tar.xz
+          echo "$HOME/xbps/usr/bin" >> $GITHUB_PATH
+
+      - name: Configure xbps-src
+        run: |
+          echo 'XBPS_CHROOT_CMD=bwrap' >> etc/conf
 
       - name: Bootstrap
         run: |
@@ -48,4 +56,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ps4-drivers
-          path: hostdir/binpkgs/*.xbps
+          path: hostdir/binpkgs/**/*.xbps
