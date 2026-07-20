@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout overlay repo
         uses: actions/checkout@v4
         with:
           path: overlay
@@ -17,33 +17,58 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/void-linux/void-packages.git
 
-      - name: Copy PS4 packages
+      - name: Copy PS4 patches and templates
         run: |
           cp -r overlay/srcpkgs/libdrm void-packages/srcpkgs/
           cp -r overlay/srcpkgs/mesa void-packages/srcpkgs/
           cp -r overlay/srcpkgs/xf86-video-amdgpu void-packages/srcpkgs/
 
-      - name: Configure xbps-src
+      - name: Prepare xbps-src config
         run: |
           cd void-packages
           mkdir -p etc
           echo "XBPS_CHROOT_CMD=ethereal" > etc/conf
+          cat etc/conf
 
-      - name: Build packages inside Void container
+      - name: Build Void packages
         run: |
           docker run --rm \
             --privileged \
             -v "$PWD/void-packages:/void-packages" \
             ghcr.io/void-linux/xbps-src-masterdir:latest-x86_64 \
             bash -c '
-              cd /void-packages
-              ./xbps-src binary-bootstrap
-              ./xbps-src pkg libdrm
-              ./xbps-src pkg xf86-video-amdgpu
-              ./xbps-src pkg mesa
+              set -e
+
+              echo "Creating builder user..."
+              useradd -m builder
+
+              echo "Fixing permissions..."
+              chown -R builder:builder /void-packages
+
+              echo "Installing required tools..."
+              xbps-install -Sy git bash tar curl ethereal
+
+              echo "Forcing ethereal..."
+              echo "XBPS_CHROOT_CMD=ethereal" > /void-packages/etc/conf
+
+              su - builder -c "
+                cd /void-packages
+
+                echo Starting bootstrap...
+                ./xbps-src binary-bootstrap
+
+                echo Building libdrm...
+                ./xbps-src pkg libdrm
+
+                echo Building xf86-video-amdgpu...
+                ./xbps-src pkg xf86-video-amdgpu
+
+                echo Building mesa...
+                ./xbps-src pkg mesa
+              "
             '
 
-      - name: Upload packages
+      - name: Upload PS4 driver packages
         uses: actions/upload-artifact@v4
         with:
           name: ps4-drivers
