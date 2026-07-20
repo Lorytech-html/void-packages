@@ -1,7 +1,7 @@
 # Template file for 'libdrm'
 pkgname=libdrm
 version=2.4.134
-revision=2.ps4
+revision=2
 build_style=meson
 configure_args="-Dudev=true -Dvalgrind=disabled -Dinstall-test-programs=true"
 hostmakedepends="pkg-config python3-docutils"
