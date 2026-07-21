@@ -91,37 +91,6 @@ checksum+="
  67914ab451f3bfd2e69e5e9d2ef3858484e7074d63f204fd166ec391b54de21d
  7988d73a4303ca289df03316bc490e934accf371af6bc745393cf3c2c5c4f25d
 "
-skip_extraction+="
- bitflags-2.9.1.tar.gz
- cfg-if-1.0.0.tar.gz
- equivalent-1.0.1.tar.gz
- errno-0.3.12.tar.gz
- hashbrown-0.14.1.tar.gz
- indexmap-2.2.6.tar.gz
- libc-0.2.171.tar.gz
- log-0.4.27.tar.gz
- once_cell-1.8.0.tar.gz
- paste-1.0.14.tar.gz
- pest-2.8.0.tar.gz
- pest_derive-2.8.0.tar.gz
- pest_generator-2.8.0.tar.gz
- pest_meta-2.8.0.tar.gz
- proc-macro2-1.0.86.tar.gz
- quote-1.0.35.tar.gz
- remain-0.2.12.tar.gz
- roxmltree-0.20.0.tar.gz
- rustc-hash-2.1.1.tar.gz
- rustix-1.1.2.tar.gz
- syn-2.0.87.tar.gz
- thiserror-2.0.11.tar.gz
- thiserror-impl-2.0.11.tar.gz
- ucd-trie-0.1.6.tar.gz
- unicode-ident-1.0.12.tar.gz
- windows-link-0.2.0.tar.gz
- windows-sys-0.61.1.tar.gz
- zerocopy-0.8.13.tar.gz
- zerocopy-derive-0.8.13.tar.gz
-"
 # END GENERATED
 
 build_options="wayland"
@@ -187,187 +156,131 @@ case "$XBPS_TARGET_MACHINE" in
 		;;
 esac
 
-if [ "$_have_llvmpipe" ]; then
-	subpackages+=" mesa-vulkan-lavapipe"
-	_vulkan_drivers+=",swrast"
-	# note: swrast IS valid for vulkan drivers still, not gallium
-else
-	configure_args+=" -Ddraw-use-llvm=false"
+if [ "$XBPS_TARGET_LIBC" = musl ]; then
+	# Requires execinfo, missing on musl
+	_have_d3d12=
 fi
 
-if [ "$_have_amd" ]; then
-	# amd cards can use clover
-	_have_opencl=yes
-	_have_vulkan=yes
+_gallium_drivers+="$(vopt_if nine ,nine)"
+if [ -n "$_have_llvmpipe" ]; then
+	_gallium_drivers+=",llvmpipe"
+fi
+if [ -n "$_have_intel" ]; then
+	_gallium_drivers+=",crocus,iris"
+	_vulkan_drivers+=",intel,intel_hasvk"
+fi
+if [ -n "$_have_amd" ]; then
 	_gallium_drivers+=",r300,r600,radeonsi"
 	_vulkan_drivers+=",amd"
-	subpackages+=" mesa-vulkan-radeon"
-	# transitional dummy packages
-	subpackages+=" mesa-ati-dri"
+fi
+if [ -n "$_have_nv" ]; then
+	_gallium_drivers+=",nouveau"
+	_vulkan_drivers+=",nouveau"
+fi
+if [ -n "$_have_vmware" ]; then
+	_gallium_drivers+=",svga"
+fi
+if [ -n "$_have_arm" ]; then
+	_gallium_drivers+=",v3d,vc4,freedreno,etnaviv,tegra,lima,panfrost,d3d12,zink"
+	_vulkan_drivers+=",broadcom,freedreno,panfrost"
+fi
+if [ -n "$_have_d3d12" ]; then
+	_gallium_drivers+=",d3d12"
+	_vulkan_drivers+=",microsoft-experimental"
+fi
+if [ -n "$_have_hwdec" ]; then
 	configure_args+=" -Dvideo-codecs=all"
 fi
-
-if [ "$_have_intel" ]; then
-	_have_vulkan=yes
-	_gallium_drivers+=",crocus,iris,i915"
-	_vulkan_drivers+=",intel,intel_hasvk"
-	subpackages+=" mesa-vulkan-intel"
-	# transitional dummy packages
-	subpackages+=" mesa-intel-dri"
-
-	case "$XBPS_TARGET_MACHINE" in
-	x86_64*) configure_args+=" -Dintel-rt=enabled" ;;
-	esac
-fi
-
-if [ "$_have_nv" ]; then
-	_gallium_drivers+=",nouveau"
-	if [ "$_have_arm" ]; then
-		_gallium_drivers+=",tegra"
-		# transitional dummy packages
-		subpackages+=" mesa-tegra-dri"
-	fi
-	_vulkan_drivers+=",nouveau"
-	hostmakedepends+=" cbindgen"
-	subpackages+=" mesa-vulkan-nouveau"
-	# transitional dummy packages
-	subpackages+=" mesa-nouveau-dri"
-fi
-
-if [ "$_have_arm" ]; then
-	_have_vulkan=yes
-	_have_opencl=yes
-	_gallium_drivers+=",v3d,vc4,freedreno,etnaviv,lima,panfrost,asahi"
-	_vulkan_drivers+=",broadcom,freedreno,panfrost,asahi"
-	subpackages+=" mesa-vulkan-broadcom mesa-vulkan-freedreno mesa-vulkan-panfrost"
-	# transitional dummy packages
-	subpackages+=" mesa-kmsro-dri mesa-v3d-dri mesa-vc4-dri"
-	subpackages+=" mesa-etnaviv-dri mesa-freedreno-dri"
-	subpackages+=" mesa-lima-dri mesa-panfrost-dri"
-fi
-
-if [ "$_have_virgl" ]; then
+if [ -n "$_have_virgl" ]; then
 	_gallium_drivers+=",virgl"
 	_vulkan_drivers+=",virtio"
 fi
 
-if [ "$_have_vmware" ]; then
-	_gallium_drivers+=",svga"
-	# transitional dummy packages
-	subpackages+=" mesa-vmwgfx-dri"
+configure_args+=" -Dgallium-drivers=${_gallium_drivers#,} -Dvulkan-drivers=${_vulkan_drivers#,}"
+
+if [ -z "$CHROOT_READY" ]; then
+	configure_args+=" -Dandroid-libbacktrace=disabled"
 fi
 
-# enabled currently by amd drivers
-if [ "$_have_opencl" ]; then
-	hostmakedepends+=" clang${_llvmver} rust rust-bindgen"
-	makedepends+=" clang${_llvmver} libclc${_llvmver} rust
-	 SPIRV-LLVM-Translator${_llvmver}-devel SPIRV-Tools-devel"
-	subpackages+=" mesa-opencl"
-	configure_args+=" -Dgallium-rusticl=true -Drust_std=2021"
-fi
-
-if [ "$_have_hwdec" ]; then
-	configure_args+=" -Dgallium-va=enabled"
-	subpackages+=" mesa-vaapi"
-else
-	configure_args+=" -Dgallium-va=disabled"
-fi
-
-if [ "$_have_d3d12" ]; then
-	_gallium_drivers+=",d3d12"
-	makedepends+=" DirectX-Headers"
-fi
-
-# empty values introduced by leading comma are not allowed; the whole enumeration can be empty
-# _gallium_drivers is not affected by this problem
-_vulkan_drivers=${_vulkan_drivers/=,/=}
-
-configure_args+=" ${_vulkan_drivers}"
-
-if [ "$_have_vulkan" ]; then
-	_have_zink=yes
-	configure_args+=" -Dvulkan-layers=device-select,overlay,screenshot,vram-report-limit,anti-lag"
-	if [ "$_have_intel" ]; then
-		configure_args+=",intel-nullhw"
-	fi
-	subpackages+=" mesa-vulkan-overlay-layer"
-fi
-
-if [ "$_have_zink" ]; then
-	_gallium_drivers+=",zink"
-	makedepends+=" vulkan-loader-devel"
-fi
-
-configure_args+=" ${_gallium_drivers}"
-
-# must be the last one for proper order
-subpackages+=" mesa-dri MesaLib-devel"
-
-case "$XBPS_TARGET_MACHINE" in
-	ppc64le*) configure_args+=" -Dpower8=true" ;;
-	ppc*) configure_args+=" -Dpower8=false" ;;
-esac
-
-post_configure() {
-	if [ "$CROSS_BUILD" ]; then
-		find -iname "*.ninja" -exec sed -i "{}" \
-			-e "/rustc/s; --sysroot ${XBPS_CROSS_BASE}/usr;;g" \
-			-e "s|-isystem/usr/include||g" \
-		\;
+pre_configure() {
+	if [ "$XBPS_TARGET_MACHINE" = "x86_64-musl" ]; then
+		vsed -i '/#include <sys\/types.h>/a #include <sys\/sysmacros.h>' \
+			src/gallium/drivers/nouveau/nv30/nv30_screen.c \
+			src/gallium/drivers/nouveau/nvc0/nvc0_screen.c
 	fi
 }
 
 post_install() {
+	# Not part of any subpkg
+	rm -f "${DESTDIR}"/usr/lib/libglapi.so
 	vlicense docs/license.rst
-
-	# ensure that each eligible architecture ships its multilib icd files
-	# in some cases, multiple counterpart architectures may exist (aarch64)
-	# this allows us to not have to ship these files in the current *-32bit packages
-	local arch=${XBPS_TARGET_MACHINE%-*}
-	local oarchs
-	local olibdir="/usr/lib32/"
-	local owordsize=32
-	if [ "$XBPS_TARGET_WORDSIZE" = "32" ]; then
-		olibdir="/usr/lib64/"
-		owordsize=64
-	fi
-	case "${arch}" in
-		aarch64) oarchs="armv6l armv7l";;
-		armv[67]l) oarchs="aarch64";;
-		x86_64) oarchs="i686";;
-		i686) oarchs="x86_64";;
-		ppc64le) oarchs="ppcle";;
-		ppc64) oarchs="ppc";;
-		ppcle) oarchs="ppc64le";;
-		ppc) oarchs="ppc64";;
-		riscv64) oarchs="riscv64";;
-		*) ;; # no counterparts
-	esac
-	for oarch in $oarchs; do
-		for icd in ${DESTDIR}/usr/share/vulkan/icd.d/*_icd.${arch}.json; do
-			sed "s#/usr/lib${XBPS_TARGET_WORDSIZE}/#${olibdir}#g; /library_arch/ s/${XBPS_TARGET_WORDSIZE}/${owordsize}/" \
-				${icd} > ${icd/.${arch}/.${oarch}}
-		done
-	done
 }
 
-mesa-libgallium_package() {
-	short_desc="Mesa internal shared platform for building graphics drivers"
+libglvnd-devel_package() {
+	short_desc+=" - vendor neutral GL dispatch library (development files)"
 	pkg_install() {
-		vmove "usr/lib/libgallium-*.so"
+		vmove usr/lib/libGL.so
+	}
+}
+
+mesa-dri_package() {
+	short_desc+=" - DRI driver"
+	depends="libglvnd>=${version}_${revision}"
+	pkg_install() {
+		vmove "usr/lib/dri"
+		vmove "usr/lib/d3d"
+	}
+}
+
+mesa-vdpau_package() {
+	short_desc+=" - Gallium VDPAU state tracker"
+	if [ -n "$_have_hwdec" ]; then
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/lib/vdpau
+		}
+	fi
+}
+
+mesa-vaapi_package() {
+	short_desc+=" - Gallium VAAPI state tracker"
+	if [ -n "$_have_hwdec" ]; then
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/lib/dri/*_drv_video.so
+		}
+	fi
+}
+
+mesa-opencl_package() {
+	short_desc+=" - Clover OpenCL state tracker"
+	if [ -n "$_have_amd" ]; then
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/lib/gallium-pipe
+			vmove usr/lib/libMesaOpenCL.so*
+		}
+	fi
+}
+
+mesa-demos_package() {
+	short_desc="Mesa demos"
+	depends="MesaLib>=${version}_${revision}"
+	pkg_install() {
+		vmove usr/bin
 	}
 }
 
 libgbm_package() {
-	short_desc="Mesa Generic buffer management API - runtime"
+	short_desc="Generic buffer management API - runtime"
 	pkg_install() {
 		vmove "usr/lib/libgbm.so.*"
 	}
 }
 
 libgbm-devel_package() {
-	short_desc="Mesa Generic buffer management API - development files"
-	depends="libgbm>=${version}_${revision}"
+	short_desc="Generic buffer management API - development files"
+	depends="libgbm-${sourcepkg}>=${version}_${revision} libdrm-devel>=${_libdrm_version}"
 	pkg_install() {
 		vmove usr/include/gbm.h
 		vmove usr/lib/libgbm.so
@@ -375,203 +288,93 @@ libgbm-devel_package() {
 	}
 }
 
-MesaLib-devel_package() {
-	depends="mesa>=${version}_${revision} libgbm-devel>=${version}_${revision}"
-	if [ "$_have_opencl" ]; then
-		depends+=" mesa-opencl>=${version}_${revision}"
-	fi
-	depends+=" libdrm-devel libglvnd-devel"
-	short_desc+=" - development files"
+mesa-libgallium_package() {
+	short_desc+=" - shared gallium code"
 	pkg_install() {
-		vmove usr/include
-		vmove usr/lib/pkgconfig
-		vmove usr/lib/libEGL_mesa.so
-		vmove usr/lib/libGLX_mesa.so
-		if [ "$_have_opencl" ]; then
-			vmove usr/lib/libRusticlOpenCL.so
-		fi
-	}
-}
-
-mesa-opencl_package() {
-	short_desc="Mesa implementation of OpenCL (r600+ only)"
-	depends="libclc${_llvmver}"
-	pkg_install() {
-		vmove etc/OpenCL
-		vmove "usr/lib/libRusticlOpenCL.so.*"
-	}
-}
-
-mesa-dri_package() {
-	short_desc="Mesa DRI drivers"
-	depends="mesa-${version}_${revision}"
-	shlib_provides="libgallium_dri.so" # workaround for mesa-dri-32bit
-	pkg_install() {
-		vmove usr/lib/dri
-	}
-}
-
-mesa-vaapi_package() {
-	short_desc="Mesa VA-API drivers"
-	shlib_provides="libgallium_drv_video.so" # workaround for mesa-vaapi-32bit
-	pkg_install() {
-		vmove "usr/lib/dri/*_drv_video.so"
-	}
-}
-
-mesa-vulkan-intel_package() {
-	short_desc="Mesa Intel Vulkan driver"
-	pkg_install() {
-		vmove "usr/share/vulkan/icd.d/intel*.json"
-		vmove "usr/lib/libvulkan_intel*.so"
-	}
-}
-
-mesa-vulkan-nouveau_package() {
-	short_desc="Mesa Nouveau Vulkan driver"
-	pkg_install() {
-		vmove "usr/share/vulkan/icd.d/nouveau*.json"
-		vmove "usr/lib/libvulkan_nouveau*.so"
-	}
-}
-
-mesa-vulkan-radeon_package() {
-	short_desc="Mesa Radeon Vulkan driver"
-	pkg_install() {
-		vmove "usr/share/drirc.d/00-radv-defaults.conf"
-		vmove "usr/share/vulkan/icd.d/radeon_icd*.json"
-		vmove "usr/lib/libvulkan_radeon.so"
-	}
-}
-
-mesa-vulkan-broadcom_package() {
-	short_desc="Mesa Broadcom Vulkan driver"
-	pkg_install() {
-		vmove "usr/share/vulkan/icd.d/broadcom_icd*.json"
-		vmove "usr/lib/libvulkan_broadcom.so"
-	}
-}
-
-mesa-vulkan-freedreno_package() {
-	short_desc="Mesa Freedreno Vulkan driver"
-	pkg_install() {
-		vmove "usr/share/vulkan/icd.d/freedreno_icd*.json"
-		vmove "usr/lib/libvulkan_freedreno.so"
-	}
-}
-
-mesa-vulkan-panfrost_package() {
-	short_desc="Mesa Panfrost Vulkan driver"
-	pkg_install() {
-		vmove "usr/share/vulkan/icd.d/panfrost_icd*.json"
-		vmove "usr/lib/libvulkan_panfrost.so"
-	}
-}
-
-mesa-vulkan-lavapipe_package() {
-	short_desc="Mesa Lavapipe Vulkan driver"
-	pkg_install() {
-		vmove "usr/share/vulkan/icd.d/lvp_icd*.json"
-		vmove "usr/lib/libvulkan_lvp*.so"
+		vmove usr/lib/libgallium-*
 	}
 }
 
 mesa-vulkan-overlay-layer_package() {
-	short_desc="Vulkan layer to display information about the running application"
-	pkg_install() {
-		vmove "usr/share/vulkan/explicit_layer.d/VkLayer_*.json"
-		vmove "usr/share/vulkan/implicit_layer.d/VkLayer_*.json"
-		vmove "usr/bin/mesa-overlay-control.py"
-		vmove "usr/lib/libVkLayer_*.so"
+	short_desc+=" - Vulkan overlay layer"
+	if [ -n "$_vulkan_drivers" ]; then
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/share/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json
+			vmove usr/lib/libVkLayer_MESA_overlay.so
+		}
+	fi
+}
+
+if [ -n "$_have_intel" ]; then
+	mesa-vulkan-intel_package() {
+		short_desc+=" - Intel Vulkan driver"
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/share/vulkan/icd.d/intel_icd*.json
+			vmove usr/share/vulkan/icd.d/intel_hasvk_icd*.json
+			vmove "usr/lib/libvulkan_intel*.so"
+			vmove "usr/lib/libvulkan_intel_hasvk*.so"
+		}
 	}
-}
+fi
 
-mesa-ati-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for ATI GPUs (transitional dummy package)"
-	depends="mesa-dri mesa-vulkan-radeon"
-	if [ "$_have_hwdec" ]; then
-		depends+=" mesa-vaapi"
-	fi
-}
+if [ -n "$_have_amd" ]; then
+	mesa-vulkan-radeon_package() {
+		short_desc+=" - AMD Vulkan driver"
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/share/vulkan/icd.d/radeon_icd*.json
+			vmove "usr/lib/libvulkan_radeon.so"
+		}
+	}
+fi
 
-mesa-etnaviv-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for Vivante GPUs (transitional dummy package)"
-	depends="mesa-dri"
-}
+if [ -n "$_have_nv" ]; then
+	mesa-vulkan-nouveau_package() {
+		short_desc+=" - NVIDIA Vulkan driver (NVK)"
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/share/vulkan/icd.d/nouveau_icd*.json
+			vmove "usr/lib/libvulkan_nouveau.so"
+		}
+	}
+fi
 
-mesa-freedreno-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for Adreno GPUs (transitional dummy package)"
-	depends="mesa-dri"
-}
+if [ -n "$_have_arm" ]; then
+	mesa-vulkan-freedreno_package() {
+		short_desc+=" - Qualcomm Adreno Vulkan driver"
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/share/vulkan/icd.d/freedreno_icd*.json
+			vmove "usr/lib/libvulkan_freedreno.so"
+		}
+	}
+	mesa-vulkan-broadcom_package() {
+		short_desc+=" - Broadcom Vulkan driver"
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/share/vulkan/icd.d/broadcom_icd*.json
+			vmove "usr/lib/libvulkan_broadcom.so"
+		}
+	}
+	mesa-vulkan-panfrost_package() {
+		short_desc+=" - Panfrost (Mali) Vulkan driver"
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/share/vulkan/icd.d/panfrost_icd*.json
+			vmove "usr/lib/libvulkan_panfrost.so"
+		}
+	}
+fi
 
-mesa-intel-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for Intel GPUs (transitional dummy package)"
-	depends="mesa-dri mesa-vulkan-intel"
-}
-
-mesa-kmsro-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="KMS Render-only Mesa DRI drivers (transitional dummy package)"
-	depends="mesa-dri"
-}
-
-mesa-lima-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for Mali GPUs (Utgard) (transitional dummy package)"
-	depends="mesa-dri"
-}
-
-mesa-nouveau-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for NVIDIA GPUs (transitional dummy package)"
-	depends="mesa-dri"
-	if [ "$_have_hwdec" ]; then
-		depends+=" mesa-vaapi mesa-vulkan-nouveau"
-	fi
-}
-
-mesa-panfrost-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for Mali GPUs (Midgard/Bifrost) (dummy package)"
-	depends="mesa-dri"
-}
-
-mesa-tegra-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for Tegra GPU (transitional dummy package)"
-	depends="mesa-dri"
-}
-
-mesa-v3d-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for Videocore VI GPU (transitional dummy package)"
-	depends="mesa-dri"
-}
-
-mesa-vmwgfx-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for VMware (transitional dummy package)"
-	depends="mesa-dri"
-}
-
-mesa-vc4-dri_package() {
-	metapackage=yes
-	lib32mode=full
-	short_desc="Mesa DRI drivers for Videocore IV GPU (transitional dummy package)"
-	depends="mesa-dri"
-}
+if [ -n "$_have_d3d12" ]; then
+	mesa-vulkan-microsoft-experimental_package() {
+		short_desc+=" - Microsoft Vulkan driver"
+		depends="libglvnd>=${version}_${revision}"
+		pkg_install() {
+			vmove usr/share/vulkan/icd.d/microsoft_icd*.json
+			vmove "usr/lib/libvulkan_microsoft.so"
+		}
+	}
+fi
