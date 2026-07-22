@@ -1,12 +1,9 @@
 name: build-ps4-drivers
-
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -16,58 +13,34 @@ jobs:
       - name: Build in Void container
         run: |
           docker run --rm --privileged \
-            -v "$PWD":/workspace \
-            -w /workspace \
+            -v "$PWD":/workspace -w /workspace \
             ghcr.io/void-linux/void-glibc-full \
             sh -c '
-              set -e
-
-              xbps-install -Syu xbps
-              xbps-install -yu
-              xbps-install -y sudo bash git curl shadow
-
-              useradd -m builder
-              chown -R builder:builder /workspace
-
-              sudo -Hu builder ./xbps-src binary-bootstrap
-
-              echo "=== BUILD LIBDRM ==="
-              sudo -Hu builder ./xbps-src pkg libdrm
-
-              echo "=== TEMPLATE INFO ==="
+              xbps-install -Syu xbps &&
+              xbps-install -yu &&
+              xbps-install -y sudo bash git curl shadow &&
+              useradd -m builder &&
+              chown -R builder:builder /workspace &&
+              sudo -Hu builder ./xbps-src binary-bootstrap &&
+              sudo -Hu builder ./xbps-src pkg libdrm &&
+              echo "=== USING TEMPLATE ==="
               pwd
-              grep -n "subpackages=" srcpkgs/mesa/template || true
+              git rev-parse HEAD
+              grep -n "subpackages=" srcpkgs/mesa/template
               grep -n "libgbm-mesa" srcpkgs/mesa/template || true
-              grep -n "libgbm" srcpkgs/mesa/template || true
-
-              echo "=== BUILD MESA ==="
-
-              if ! sudo -Hu builder ./xbps-src pkg mesa; then
-
-                echo
-                echo "========== PATCH REJECT FILES =========="
-                find . -name "*.rej" -print -exec cat {} \; 2>/dev/null || true
-
-                echo
-                echo "========== ac_gpu_info.c =========="
-                find . -name "ac_gpu_info.c" | while read f; do
-                  echo "----- $f -----"
-                  sed -n "520,660p" "$f"
-                done
-
-                echo
-                echo "========== PATCHES =========="
-                find srcpkgs/mesa/patches -type f -print -exec cat {} \;
-
-                exit 1
-              fi
-
-              echo "=== BUILD XF86 ==="
-              sudo -Hu builder ./xbps-src pkg xf86-video-amdgpu
+              grep -n "libgbm" srcpkgs/mesa/template
+              sudo -Hu builder ./xbps-src pkg mesa &&
+              (sudo -Hu builder ./xbps-src pkg xf86-video-amdgpu || {
+                echo "=== PATCH REJECTS ===";
+                find / -name "*.rej" 2>/dev/null | while read -r f; do
+                  echo "--- $f ---";
+                  cat "$f";
+                done;
+                exit 1;
+              })
             '
 
       - uses: actions/upload-artifact@v4
-        if: success()
         with:
           name: ps4-drivers
           path: hostdir/binpkgs/**/*.xbps
