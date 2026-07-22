@@ -26,8 +26,6 @@ jobs:
               xbps-install -yu
               xbps-install -y sudo bash git curl shadow
 
-              id
-
               useradd -m builder
               chown -R builder:builder /workspace
 
@@ -38,7 +36,6 @@ jobs:
 
               echo "=== TEMPLATE INFO ==="
               pwd
-              git rev-parse HEAD
               grep -n "subpackages=" srcpkgs/mesa/template || true
               grep -n "libgbm-mesa" srcpkgs/mesa/template || true
               grep -n "libgbm" srcpkgs/mesa/template || true
@@ -47,30 +44,22 @@ jobs:
 
               if ! sudo -Hu builder ./xbps-src pkg mesa; then
 
-                  echo
-                  echo "========== PATCH REJECT FILES =========="
+                echo
+                echo "========== PATCH REJECT FILES =========="
+                find . -name "*.rej" -print -exec cat {} \; 2>/dev/null || true
 
-                  find / -name "*.rej" 2>/dev/null | while read f; do
-                      echo
-                      echo "----- $f -----"
-                      cat "$f"
-                  done
+                echo
+                echo "========== ac_gpu_info.c =========="
+                find . -name "ac_gpu_info.c" | while read f; do
+                  echo "----- $f -----"
+                  sed -n "520,660p" "$f"
+                done
 
-                  echo
-                  echo "========== ac_gpu_info.c =========="
+                echo
+                echo "========== PATCHES =========="
+                find srcpkgs/mesa/patches -type f -print -exec cat {} \;
 
-                  find / -name ac_gpu_info.c 2>/dev/null | while read f; do
-                      echo
-                      echo "----- $f -----"
-                      sed -n "520,660p" "$f"
-                  done
-
-                  echo
-                  echo "========== PATCHES =========="
-
-                  find srcpkgs/mesa/patches -type f -print -exec cat {} \;
-
-                  exit 1
+                exit 1
               fi
 
               echo "=== BUILD XF86 ==="
