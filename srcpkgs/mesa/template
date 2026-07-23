@@ -1,6 +1,6 @@
 # Template file for 'mesa'
 pkgname=mesa
-version=26.1.5
+version=26.0.3
 revision=2
 build_style=meson
 build_helper="qemu"
