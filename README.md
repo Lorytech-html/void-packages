@@ -1,7 +1,7 @@
 # W.I.P
 
-## Void linux on a ps4?
-Yes, void linux runit on a Playstation 4 ?
+## Void linux on a ps4??
+Yes, void linux runit on a Playstation 4 
 
 ### Requirements
 - Jailbroken ps4 
