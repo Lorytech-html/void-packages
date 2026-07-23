@@ -24,8 +24,8 @@ maintainer="Orphaned <orphan@voidlinux.org>"
 license="MIT, LGPL-2.1-or-later"
 homepage="https://www.mesa3d.org/"
 changelog="https://docs.mesa3d.org/relnotes.html"
-distfiles="https://mesa3d.org/archive/mesa-${version}.tar.xz"
-checksum=79e421c7ce18cd9e790b8375920325779f10798630bf30e0b22f1a21c8617122
+distfiles="https://gitlab.freedesktop.org/mesa/mesa/-/archive/mesa-26.0.3/mesa-mesa-26.0.3.tar.gz"
+checksum=edab4a96dc582fb38aca63fb59c633c2bb1e069035ba8d441fc127daaa2a266b
 
 # XXX: use `common/scripts/gen-wrap-distfiles.py masterdir-*/builddir/mesa-*/subprojects/*-rs.wrap` to generate
 # BEGIN GENERATED
