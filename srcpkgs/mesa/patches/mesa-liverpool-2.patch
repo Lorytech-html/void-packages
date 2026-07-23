@@ -1,12 +1,12 @@
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
-@@
-    case CHIP_VERDE:
-    case CHIP_HAINAN:
-    case CHIP_BONAIRE:
-+   case CHIP_LIVERPOOL:
-+   case CHIP_GLADIUS:
-    case CHIP_KAVERI:
-    case CHIP_ICELAND:
-    case CHIP_CARRIZO:
+@@ -1129,6 +1131,8 @@
+       case CHIP_VERDE:
+       case CHIP_HAINAN:
+       case CHIP_BONAIRE:
++      case CHIP_LIVERPOOL:
++      case CHIP_GLADIUS:
+       case CHIP_KAVERI:
+       case CHIP_ICELAND:
+       case CHIP_CARRIZO:
