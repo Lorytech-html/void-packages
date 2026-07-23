@@ -1,11 +1,11 @@
 # W.I.P
 
-## Void linux on a ps4?? WHAT
+## Void linux on a ps4?
 Yes, void linux runit on a Playstation 4 ?
 
 ### Requirements
 - Jailbroken ps4 
-if u dont have jailbroken your ps4 yet, click [here](#how-to-jailbrek-ps4)??
+if u dont have jailbroken your ps4 yet, click [here](#how-to-jailbrek-ps4)
 - Wifi connection for ftp (you can use an usb stick too)
 - Goldhen  v2.4b18.10 or up
 -  
