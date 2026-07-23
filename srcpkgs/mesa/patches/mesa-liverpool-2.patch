@@ -1,0 +1,11 @@
+--- a/src/amd/common/ac_gpu_info.c
++++ b/src/amd/common/ac_gpu_info.c
+@@ -582,6 +582,8 @@
+      case CHIP_VERDE:
+      case CHIP_HAINAN:
+      case CHIP_BONAIRE:
++      case CHIP_LIVERPOOL:
++      case CHIP_GLADIUS:
+      case CHIP_KAVERI:
+      case CHIP_ICELAND:
+      case CHIP_CARRIZO:
