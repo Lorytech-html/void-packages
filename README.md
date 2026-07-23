@@ -3,8 +3,8 @@ Yes, void linux runit on a Playstation 4 ?
 
 ### Requirements
 - Jailbroken ps4 
-if u dont have it then click [here](#How to jailbrek ps4)?
-
+if u dont have jailbroken your ps4 yet, click [here](#how-to-jailbrek-ps4)??
+- Wifi connection for ftp (you can use an usb stick too)
 
 ### How to jailbrek ps4
 #### Requirements to jailbrek your ps4
