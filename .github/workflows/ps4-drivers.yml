@@ -9,7 +9,6 @@ jobs:
   build-rootfs:
     runs-on: ubuntu-latest
 
-    # Job eseguito direttamente dentro il container Void Linux
     container:
       image: ghcr.io/void-linux/void-glibc-full:latest
       options: --privileged
@@ -20,27 +19,37 @@ jobs:
 
       - name: Installa dipendenze di sistema nel container
         run: |
-          # 'github-cli' fornisce il comando 'gh' su Void
-          xbps-install -Sy -y github-cli curl tar xz
+          xbps-install -Sy -y github-cli curl tar xz unzip
 
-      - name: Download artifact da void-packages
+      - name: Download e preparazione artifact
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p /tmp/packages
+          # Scarica l'artifact
           gh run download 30049135182 --repo Lorytech-html/void-packages --dir /tmp/packages
+          
+          # Se l'artifact è archiviato in file .zip, estrailo
+          find /tmp/packages -type f -name "*.zip" -exec unzip -o {} -d /tmp/packages \;
+          
+          # Sposta tutti i pacchetti .xbps dalle sottocartelle direttamente in /tmp/packages
+          find /tmp/packages -mindepth 2 -type f -name "*.xbps" -exec mv {} /tmp/packages/ \;
 
-      - name: Prepara /rootfs e installa il pacchetto (pacman -U per Void)
+          # Verifica nel log i file pronti
+          echo "Contenuto pacchetti:"
+          ls -la /tmp/packages/*.xbps
+
+      - name: Prepara /rootfs e installa il pacchetto
         run: |
           # 1. Prepara la struttura e copia le chiavi di firma XBPS
           mkdir -p /rootfs /rootfs/var/db/xbps/keys
           cp -a /var/db/xbps/keys/* /rootfs/var/db/xbps/keys/
 
-          # 2. Crea l'indice del repository locale con i pacchetti .xbps scaricati
+          # 2. Crea l'indice del repository locale
           cd /tmp/packages
           xbps-rindex -a *.xbps
 
-          # 3. Installa base-system e il pacchetto locale dentro /rootfs
+          # 3. Installa base-system e i pacchetti locali dentro /rootfs
           xbps-install -Sy -y \
             -R https://repo-default.voidlinux.org/current \
             -R /tmp/packages \
