@@ -1,0 +1,85 @@
+name: Build PS4 Linux RootFS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-rootfs:
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/void-linux/void-glibc-full:latest
+      options: --privileged
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Installa dipendenze di sistema nel container
+        run: |
+          xbps-install -Sy -y github-cli curl tar xz unzip
+
+      - name: Download e preparazione artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/packages
+          gh run download 30049135182 --repo Lorytech-html/void-packages --dir /tmp/packages
+          
+          find /tmp/packages -type f -name "*.zip" -exec unzip -o {} -d /tmp/packages \;
+          find /tmp/packages -mindepth 2 -type f -name "*.xbps" -exec mv {} /tmp/packages/ \;
+
+          # Rimuovi pacchetti di bootstrap che causano conflitti
+          rm -f /tmp/packages/*-bootstrap*.xbps
+
+          echo "Contenuto pacchetti da installare:"
+          ls -la /tmp/packages/*.xbps
+
+      - name: Prepara /rootfs e installa i pacchetti
+        run: |
+          # 1. Prepara la struttura e copia le chiavi di firma XBPS
+          mkdir -p /rootfs /rootfs/var/db/xbps/keys
+          cp -a /var/db/xbps/keys/* /rootfs/var/db/xbps/keys/
+
+          # 2. Crea l'indice del repository locale
+          cd /tmp/packages
+          xbps-rindex -a *.xbps
+
+          # 3. Estrai i nomi dei pacchetti
+          PKGS=$(ls *.xbps | sed -E 's/\.[^.]+\.xbps$//')
+
+          # 4. Installa base-system e i pacchetti locali dentro /rootfs
+          xbps-install -Sy -y \
+            -R https://repo-default.voidlinux.org/current \
+            -R /tmp/packages \
+            -r /rootfs \
+            base-system $PKGS
+
+      - name: Configura utente Root e Login
+        run: |
+          # Imposta la password di root su 'ps4'
+          chroot /rootfs sh -c 'echo "root:ps4" | chpasswd'
+
+          # Se preferisci il login SENZA password, decommenta la riga sotto:
+          # chroot /rootfs passwd -d root
+
+          # Configura hostname e permessi essenziali
+          echo "ps4-void" > /rootfs/etc/hostname
+          chmod 1777 /rootfs/tmp
+
+      - name: Comprimi RootFS
+        run: |
+          mkdir -p /workspace
+          tar \
+            --numeric-owner \
+            --xattrs \
+            -C /rootfs \
+            -cJf /workspace/ps4linux.tar.xz .
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4linux-rootfs
+          path: /workspace/ps4linux.tar.xz
