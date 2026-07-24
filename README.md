@@ -6,11 +6,17 @@ Yes, void linux on a Playstation 4
 ### Requirements
 > [!WARNING]
 > if u dont have jailbroken your ps4 yet, click [here](#how-to-jailbrek-ps4)
-but if you have then follow this [guide](#linux-on-a-ps4)
+but if you have follow this [guide](#linux-on-a-ps4)
 - Jailbroken ps4 
 - Wifi connection for ftp (you can use an usb stick too)
 - Goldhen v2.4b18.10 or up
 
+# Linux on a ps4
+#### Requirements
+- FTP server connection
+- ps4
+
+### Guide
 
 ### How to jailbrek ps4
 #### Requirements to jailbrek your ps4
@@ -26,7 +32,7 @@ but if you have then follow this [guide](#linux-on-a-ps4)
 
 [Raccomended guide here](https://github.com/Vuemony/vue-after-free#supported-by-this-repository)
 
-# Linux on a ps4
+
 
 
 
