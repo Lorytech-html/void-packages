@@ -17,7 +17,7 @@ but if you have follow this [guide](#linux-on-a-ps4)
 - ps4
 
 ### Guide
-linux placeholder :(
+plqceholder placeholder bla bla bla yap yap placeholder :(
 
 
 
