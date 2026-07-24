@@ -32,7 +32,10 @@ jobs:
           find /tmp/packages -type f -name "*.zip" -exec unzip -o {} -d /tmp/packages \;
           find /tmp/packages -mindepth 2 -type f -name "*.xbps" -exec mv {} /tmp/packages/ \;
 
-          echo "Contenuto pacchetti:"
+          # Rimuovi i pacchetti di bootstrap che causano conflitti
+          rm -f /tmp/packages/*-bootstrap*.xbps
+
+          echo "Contenuto pacchetti da installare:"
           ls -la /tmp/packages/*.xbps
 
       - name: Prepara /rootfs e installa i pacchetti
@@ -45,7 +48,7 @@ jobs:
           cd /tmp/packages
           xbps-rindex -a *.xbps
 
-          # 3. Converte i nomi dei file (es. mesa-26.0.3_2.x86_64.xbps) nei nomi pacchetto (es. mesa-26.0.3_2)
+          # 3. Converte i nomi dei file nei nomi pacchetto XBPS
           PKGS=$(ls *.xbps | sed -E 's/\.[^.]+\.xbps$//')
 
           # 4. Installa base-system e tutti i pacchetti locali dentro /rootfs
