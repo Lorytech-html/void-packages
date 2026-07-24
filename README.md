@@ -17,6 +17,13 @@ but if you have follow this [guide](#linux-on-a-ps4)
 - ps4
 
 ### Guide
+linux placeholder :(
+
+
+
+
+
+
 
 ### How to jailbrek ps4
 #### Requirements to jailbrek your ps4
