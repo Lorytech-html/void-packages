@@ -9,7 +9,7 @@ jobs:
   build-rootfs:
     runs-on: ubuntu-latest
 
-    # Eseguiamo il job dentro il container ufficiale di Void Linux
+    # Job eseguito direttamente dentro il container Void Linux
     container:
       image: ghcr.io/void-linux/void-glibc-full:latest
       options: --privileged
@@ -20,30 +20,27 @@ jobs:
 
       - name: Installa dipendenze di sistema nel container
         run: |
-          xbps-install -Sy -y gh curl tar xz
+          # 'github-cli' fornisce il comando 'gh' su Void
+          xbps-install -Sy -y github-cli curl tar xz
 
       - name: Download artifact da void-packages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p /tmp/packages
-          # Scarica gli artifact della run specificata tramite GitHub CLI
           gh run download 30049135182 --repo Lorytech-html/void-packages --dir /tmp/packages
 
       - name: Prepara /rootfs e installa il pacchetto (pacman -U per Void)
         run: |
-          # 1. Crea la directory target /rootfs
+          # 1. Prepara la struttura e copia le chiavi di firma XBPS
           mkdir -p /rootfs /rootfs/var/db/xbps/keys
-          
-          # Copia le chiavi di firma XBPS dentro il rootfs per consentire l'installazione
           cp -a /var/db/xbps/keys/* /rootfs/var/db/xbps/keys/
 
-          # 2. Crea l'indice del repository locale per i pacchetti .xbps scaricati
+          # 2. Crea l'indice del repository locale con i pacchetti .xbps scaricati
           cd /tmp/packages
           xbps-rindex -a *.xbps
 
           # 3. Installa base-system e il pacchetto locale dentro /rootfs
-          # -R include sia i mirror ufficiali che la cartella locale dei pacchetti
           xbps-install -Sy -y \
             -R https://repo-default.voidlinux.org/current \
             -R /tmp/packages \
