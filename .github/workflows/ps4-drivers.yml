@@ -1,73 +1,66 @@
-name:  du bist gut genugg
+name: Build PS4 Linux RootFS
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: read
-  actions: read
+  push:
+    branches: [ "main", "master" ]
 
 jobs:
-  rootfs:
+  build-rootfs:
     runs-on: ubuntu-latest
 
+    # Eseguiamo il job dentro il container ufficiale di Void Linux
+    container:
+      image: ghcr.io/void-linux/void-glibc-full:latest
+      options: --privileged
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: dawidd6/action-download-artifact@v9
-        with:
-          repo: Lorytech-html/void-packages
-          run_id: 30049135182
-          name: ps4-drivers
-          path: .
-
-      - name: Build PS4 rootfs
+      - name: Installa dipendenze di sistema nel container
         run: |
-          docker run --rm --privileged \
-            -v "$PWD":/workspace \
-            -w /workspace \
-            ghcr.io/void-linux/void-glibc-full \
-            sh -euxc '
-              xbps-install -S -A -y xbps void-release
+          xbps-install -Sy -y gh curl tar xz
 
-              mkdir -p /repo
-              cp *.xbps /repo/
-              cp bootstrap/*.xbps /repo/
+      - name: Download artifact da void-packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/packages
+          # Scarica gli artifact della run specificata tramite GitHub CLI
+          gh run download 30049135182 --repo Lorytech-html/void-packages --dir /tmp/packages
 
-              xbps-rindex -a /repo/*.xbps
+      - name: Prepara /rootfs e installa il pacchetto (pacman -U per Void)
+        run: |
+          # 1. Crea la directory target /rootfs
+          mkdir -p /rootfs /rootfs/var/db/xbps/keys
+          
+          # Copia le chiavi di firma XBPS dentro il rootfs per consentire l'installazione
+          cp -a /var/db/xbps/keys/* /rootfs/var/db/xbps/keys/
 
-              mkdir -p /rootfs
+          # 2. Crea l'indice del repository locale per i pacchetti .xbps scaricati
+          cd /tmp/packages
+          xbps-rindex -a *.xbps
 
-              xbps-install \
-                -S -A -y \
-                -r /rootfs \
-                -R https://repo-default.voidlinux.org/current \
-                base-voidstrap \
-                runit-void
+          # 3. Installa base-system e il pacchetto locale dentro /rootfs
+          # -R include sia i mirror ufficiali che la cartella locale dei pacchetti
+          xbps-install -Sy -y \
+            -R https://repo-default.voidlinux.org/current \
+            -R /tmp/packages \
+            -r /rootfs \
+            base-system *.xbps
 
-              xbps-install \
-                -A -y \
-                -r /rootfs \
-                -R /repo \
-                -R https://repo-default.voidlinux.org/current \
-                -f \
-                libdrm \
-                mesa \
-                mesa-dri \
-                mesa-vulkan-radeon \
-                xf86-video-amdgpu
+      - name: Comprimi RootFS
+        run: |
+          mkdir -p /workspace
+          tar \
+            --numeric-owner \
+            --xattrs \
+            -C /rootfs \
+            -cJf /workspace/ps4linux.tar.xz .
 
-              xbps-remove -r /rootfs -Oo || true
-              rm -rf /rootfs/var/cache/xbps
-
-              tar \
-                --numeric-owner \
-                --xattrs \
-                -C /rootfs \
-                -cJf /workspace/ps4linux.tar.xz .
-            '
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: ps4linux-rootfs
-          path: ps4linux.tar.xz
+          path: /workspace/ps4linux.tar.xz
