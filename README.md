@@ -21,8 +21,7 @@ if u dont have jailbroken your ps4 yet, click [here](#how-to-jailbrek-ps4)
 #### How to jailbreak your ps4
 > [!WARNING]
 > THIS GUIDE REQUIRES FORMATTING YOUR USB STICK, FORMATTING ANY USB STICK WILL REMOVE ANY DATA THAT IS IN IT!
-1. plug the usb stick in your device and format it in exfat64/fat32
-2. 
+[Raccomended guide here](https://github.com/Vuemony/vue-after-free#supported-by-this-repository)
 
 
 
