@@ -1,4 +1,5 @@
-name: get ps4 tar xz plz
+name:  du bist gut genugg
+
 on:
   workflow_dispatch:
 
@@ -11,8 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Download drivers artifact
         uses: dawidd6/action-download-artifact@v9
@@ -23,11 +23,9 @@ jobs:
           path: .
 
       - name: Extract artifact
-        run: |
-          unzip -o ps4-drivers.zip
-          ls -R
+        run: unzip -o ps4-drivers.zip
 
-      - name: Build rootfs
+      - name: Build Void rootfs
         run: |
           docker run --rm --privileged \
             -v "$PWD":/workspace \
@@ -36,32 +34,43 @@ jobs:
             sh -ec '
               xbps-install -Syu xbps
 
-              mkdir -p /rootfs
+              mkdir -p /repo /rootfs
+
+              cp /workspace/*.xbps /repo/ || true
+
+              if [ -d /workspace/bootstrap ]; then
+                  cp /workspace/bootstrap/*.xbps /repo/ || true
+              fi
+
+              cd /repo
+              xbps-rindex -fa *.xbps
 
               xbps-install -Sy \
-                -r /rootfs \
-                -R https://repo-default.voidlinux.org/current \
-                base-voidstrap runit-void
+                  -r /rootfs \
+                  -R /repo \
+                  -R https://repo-default.voidlinux.org/current \
+                  base-voidstrap \
+                  runit-void
 
               xbps-install -Sy -f \
-                -r /rootfs \
-                -R /workspace/hostdir/binpkgs \
-                -R https://repo-default.voidlinux.org/current \
-                libdrm \
-                libdrm-devel \
-                mesa \
-                mesa-dri \
-                mesa-vulkan-radeon \
-                xf86-video-amdgpu
+                  -r /rootfs \
+                  -R /repo \
+                  -R https://repo-default.voidlinux.org/current \
+                  libdrm \
+                  libdrm-devel \
+                  mesa \
+                  mesa-dri \
+                  mesa-vulkan-radeon \
+                  xf86-video-amdgpu
 
               xbps-remove -O -r /rootfs
 
               tar \
-                --numeric-owner \
-                --xattrs \
-                --exclude=./var/cache/xbps \
-                -C /rootfs \
-                -cJf /workspace/ps4linux.tar.xz .
+                  --numeric-owner \
+                  --xattrs \
+                  --exclude=./var/cache/xbps \
+                  -C /rootfs \
+                  -cJf /workspace/ps4linux.tar.xz .
             '
 
       - name: Upload rootfs
