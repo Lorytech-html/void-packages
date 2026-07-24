@@ -26,20 +26,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p /tmp/packages
-          # Scarica l'artifact
           gh run download 30049135182 --repo Lorytech-html/void-packages --dir /tmp/packages
           
-          # Se l'artifact è archiviato in file .zip, estrailo
+          # Estrai eventuali zip e sposta i file .xbps nella cartella principale
           find /tmp/packages -type f -name "*.zip" -exec unzip -o {} -d /tmp/packages \;
-          
-          # Sposta tutti i pacchetti .xbps dalle sottocartelle direttamente in /tmp/packages
           find /tmp/packages -mindepth 2 -type f -name "*.xbps" -exec mv {} /tmp/packages/ \;
 
-          # Verifica nel log i file pronti
           echo "Contenuto pacchetti:"
           ls -la /tmp/packages/*.xbps
 
-      - name: Prepara /rootfs e installa il pacchetto
+      - name: Prepara /rootfs e installa i pacchetti
         run: |
           # 1. Prepara la struttura e copia le chiavi di firma XBPS
           mkdir -p /rootfs /rootfs/var/db/xbps/keys
@@ -49,12 +45,15 @@ jobs:
           cd /tmp/packages
           xbps-rindex -a *.xbps
 
-          # 3. Installa base-system e i pacchetti locali dentro /rootfs
+          # 3. Converte i nomi dei file (es. mesa-26.0.3_2.x86_64.xbps) nei nomi pacchetto (es. mesa-26.0.3_2)
+          PKGS=$(ls *.xbps | sed -E 's/\.[^.]+\.xbps$//')
+
+          # 4. Installa base-system e tutti i pacchetti locali dentro /rootfs
           xbps-install -Sy -y \
             -R https://repo-default.voidlinux.org/current \
             -R /tmp/packages \
             -r /rootfs \
-            base-system *.xbps
+            base-system $PKGS
 
       - name: Comprimi RootFS
         run: |
