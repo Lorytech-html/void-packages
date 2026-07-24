@@ -71,4 +71,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ps4linux-rootfs
-          path: ps4linux.tar.xz          path: ps4linux.tar.xz
+          path: ps4linux.tar.xz          
+          path: ps4linux.tar.xz
