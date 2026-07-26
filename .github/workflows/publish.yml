@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: write
-  actions: read # Necessario per scaricare gli artefatti
+  actions: read
 
 jobs:
   build:
@@ -23,19 +23,28 @@ jobs:
           mkdir -p repo/x86_64
           URL="${{ github.event.inputs.zip_url }}"
 
-          # Se l'URL contiene l'ID di un artefatto di GitHub Actions
+          # Scarica l'archivio (artefatto o URL diretto)
           if [[ "$URL" =~ artifacts/([0-9]+) ]]; then
-            ARTIFACT_ID="${BASH_REMATCH[1]}"
-            echo "Rilevato Artefatto di GitHub Actions (ID: $ARTIFACT_ID). Download tramite GitHub CLI..."
-            gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > ps4-drivers.zip
+            echo "Download Artefatto tramite GitHub CLI..."
+            gh api "repos/${{ github.repository }}/actions/artifacts/${BASH_REMATCH[1]}/zip" > ps4-drivers.zip
           else
             echo "Download URL generico tramite curl..."
             curl -L "$URL" -o ps4-drivers.zip
           fi
 
-          # Estrazione dei pacchetti .xbps
-          unzip -j -o ps4-drivers.zip "*.xbps" -d repo/x86_64
+          # Estrazione selettiva dei soli pacchetti driver / librerie grafiche
+          unzip -j -o ps4-drivers.zip \
+            "libdrm*.xbps" \
+            "mesa*.xbps" \
+            "MesaLib*.xbps" \
+            "libgbm*.xbps" \
+            "xf86-video-amdgpu*.xbps" \
+            -d repo/x86_64 || true
+
           rm ps4-drivers.zip
+
+          # Failsafe: Rimuove qualsiasi file superiore a 95MB per evitare blocchi su GitHub
+          find repo/x86_64 -type f -size +95M -exec rm -f {} +
 
       - name: Generate xbps repo index
         run: |
