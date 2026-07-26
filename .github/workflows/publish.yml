@@ -1,9 +1,9 @@
-name: build-ps4-repo
+Name: build-ps4-repo
 on:
   workflow_dispatch:
     inputs:
-      zip_url:
-        description: 'Link diretto al file ps4-drivers.zip (es. asset di una Release)'
+      package_url:
+        description: 'Link diretto al file .xbps (es. asset di una Release)'
         required: true
 
 jobs:
@@ -12,13 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download and unpack drivers
+      - name: Download driver package
         run: |
-          curl -L "${{ github.event.inputs.zip_url }}" -o ps4-drivers.zip
           mkdir -p repo/x86_64
-          unzip -j -o ps4-drivers.zip \
-            "libdrm*.xbps" "mesa*.xbps" "libgbm*.xbps" "xf86-video-amdgpu*.xbps" \
-            -d repo/x86_64
+          cd repo/x86_64
+          curl -L -O "${{ github.event.inputs.package_url }}"
 
       - name: Generate xbps repo index
         run: |
@@ -29,8 +27,8 @@ jobs:
 
       - name: Commit repo to this repository
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add repo/x86_64
           git commit -m "update ps4 driver repo" || echo "nothing to commit"
           git push
