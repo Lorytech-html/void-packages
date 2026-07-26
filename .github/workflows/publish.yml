@@ -6,6 +6,10 @@ on:
         description: 'Link diretto al file .xbps (es. asset di una Release)'
         required: true
 
+# Concede i permessi di scrittura al token del workflow
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
