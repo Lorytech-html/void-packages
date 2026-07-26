@@ -1,4 +1,4 @@
-Name: build-ps4-repo
+name: build-ps4-repo
 on:
   workflow_dispatch:
     inputs:
