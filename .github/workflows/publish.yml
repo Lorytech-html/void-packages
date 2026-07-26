@@ -1,51 +1,83 @@
-name: Publish XBPS Repository
+name: build-ps4-drivers
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: write
-  actions: read
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-
-    container:
-      image: ghcr.io/void-linux/void-glibc-full:latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Build in Void container
         run: |
-          mkdir artifact
+          docker run --rm --privileged \
+            -v "$PWD":/workspace \
+            -w /workspace \
+            ghcr.io/void-linux/void-glibc-full \
+            sh -ec '
+              xbps-install -Syu xbps
+              xbps-install -yu
+              xbps-install -y sudo bash git curl shadow findutils
 
-          curl -L \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/8581634335/zip" \
-            -o artifact.zip
+              useradd -m builder
+              chown -R builder:builder /workspace
 
-          unzip artifact.zip -d artifact
+              sudo -Hu builder ./xbps-src binary-bootstrap
 
-      - name: Create repository
+              sudo -Hu builder ./xbps-src pkg libdrm
+
+              sudo -Hu builder ./xbps-src pkg xf86-video-amdgpu || {
+                echo "=== PATCH REJECTS ==="
+                find / -name "*.rej" -exec sh -c "echo ==== \$1 ====; cat \$1" sh {} \;
+                exit 1
+              }
+
+              sudo -Hu builder ./xbps-src pkg mesa
+            '
+
+      - name: Create XBPS repository
         run: |
-          mkdir -p repo/x86_64
+          docker run --rm \
+            -v "$PWD":/workspace \
+            -w /workspace \
+            ghcr.io/void-linux/void-glibc-full \
+            sh -ec '
+              xbps-install -Sy xbps findutils
 
-          find artifact -maxdepth 1 -type f -name "*.xbps" -exec cp {} repo/x86_64/ \;
+              rm -f repo/x86_64/*.xbps
+              rm -f repo/x86_64/xbps-repodata*
 
-          xbps-rindex -fa repo/x86_64/*.xbps
+              find hostdir/binpkgs \
+                -type f \
+                -name "*.xbps" \
+                ! -path "*/bootstrap/*" \
+                -exec cp {} repo/x86_64/ \;
 
-      - name: Commit repository
+              xbps-rindex -fa repo/x86_64/*.xbps
+            '
+
+      - name: Upload repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-drivers-repo
+          path: repo/x86_64
+
+      - name: Commit updated repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add repo/x86_64
 
-          git commit -m "Update XBPS repository" || exit 0
+          git diff --cached --quiet && exit 0
 
+          git commit -m "Update XBPS repository"
           git push
