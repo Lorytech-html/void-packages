@@ -2,11 +2,10 @@ name: build-ps4-repo
 on:
   workflow_dispatch:
     inputs:
-      package_url:
-        description: 'Link diretto al file .xbps (es. asset di una Release)'
+      zip_url:
+        description: 'Link diretto al file ps4-drivers.zip (es. asset di una Release)'
         required: true
 
-# Concede i permessi di scrittura al token del workflow
 permissions:
   contents: write
 
@@ -16,11 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download driver package
+      - name: Download and unpack drivers
         run: |
           mkdir -p repo/x86_64
-          cd repo/x86_64
-          curl -L -O "${{ github.event.inputs.package_url }}"
+          curl -L "${{ github.event.inputs.zip_url }}" -o ps4-drivers.zip
+          unzip -j -o ps4-drivers.zip "*.xbps" -d repo/x86_64
+          rm ps4-drivers.zip
 
       - name: Generate xbps repo index
         run: |
