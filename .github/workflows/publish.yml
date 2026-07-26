@@ -1,83 +1,36 @@
-name: build-ps4-drivers
-
+name: build-ps4-repo
 on:
   workflow_dispatch:
-
-permissions:
-  contents: write
+    inputs:
+      zip_url:
+        description: 'Link diretto al file ps4-drivers.zip (es. asset di una Release)'
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Allow unprivileged user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      - name: Build in Void container
+      - name: Download and unpack drivers
         run: |
-          docker run --rm --privileged \
-            -v "$PWD":/workspace \
-            -w /workspace \
-            ghcr.io/void-linux/void-glibc-full \
-            sh -ec '
-              xbps-install -Syu xbps
-              xbps-install -yu
-              xbps-install -y sudo bash git curl shadow findutils
+          curl -L "${{ github.event.inputs.zip_url }}" -o ps4-drivers.zip
+          mkdir -p repo/x86_64
+          unzip -j -o ps4-drivers.zip \
+            "libdrm*.xbps" "mesa*.xbps" "libgbm*.xbps" "xf86-video-amdgpu*.xbps" \
+            -d repo/x86_64
 
-              useradd -m builder
-              chown -R builder:builder /workspace
-
-              sudo -Hu builder ./xbps-src binary-bootstrap
-
-              sudo -Hu builder ./xbps-src pkg libdrm
-
-              sudo -Hu builder ./xbps-src pkg xf86-video-amdgpu || {
-                echo "=== PATCH REJECTS ==="
-                find / -name "*.rej" -exec sh -c "echo ==== \$1 ====; cat \$1" sh {} \;
-                exit 1
-              }
-
-              sudo -Hu builder ./xbps-src pkg mesa
-            '
-
-      - name: Create XBPS repository
+      - name: Generate xbps repo index
         run: |
           docker run --rm \
-            -v "$PWD":/workspace \
-            -w /workspace \
+            -v "$PWD/repo/x86_64":/repo \
             ghcr.io/void-linux/void-glibc-full \
-            sh -ec '
-              xbps-install -Sy xbps findutils
+            sh -c 'xbps-rindex -a /repo/*.xbps'
 
-              rm -f repo/x86_64/*.xbps
-              rm -f repo/x86_64/xbps-repodata*
-
-              find hostdir/binpkgs \
-                -type f \
-                -name "*.xbps" \
-                ! -path "*/bootstrap/*" \
-                -exec cp {} repo/x86_64/ \;
-
-              xbps-rindex -fa repo/x86_64/*.xbps
-            '
-
-      - name: Upload repository
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps4-drivers-repo
-          path: repo/x86_64
-
-      - name: Commit updated repository
+      - name: Commit repo to this repository
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
           git add repo/x86_64
-
-          git diff --cached --quiet && exit 0
-
-          git commit -m "Update XBPS repository"
+          git commit -m "update ps4 driver repo" || echo "nothing to commit"
           git push
