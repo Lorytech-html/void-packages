@@ -1,4 +1,4 @@
-# W.I.P
+# Dionkill’s mesa,libdrm,xf86-video-amdgpu ports for void linux yay
 
 ## Void linux on a ps4??
 Yes, void linux on a Playstation 4 
