@@ -1,0 +1,77 @@
+name: Build repo x86_64
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Pacchetti da buildare (separati da spazio)'
+        required: true
+        default: 'hyprland'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/void-linux/void-glibc-full:latest
+      options: --privileged
+
+    steps:
+      - name: Checkout blackhole-vl
+        uses: actions/checkout@v4
+        with:
+          path: blackhole-vl
+
+      - name: Update xbps and install git
+        run: |
+          xbps-install -Suy xbps
+          xbps-install -Suy git base-devel
+
+      - name: Clone void-packages
+        run: git clone --depth 1 https://github.com/void-linux/void-packages.git
+
+      - name: Copy templates into void-packages
+        run: cp -r blackhole-vl/srcpkgs/* void-packages/srcpkgs/
+
+      - name: Apply shlibs changes
+        run: |
+          cd void-packages
+          if [ -f ../blackhole-vl/shlibs_remove ]; then
+            while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              sed -i "\|^${line}\$|d" common/shlibs
+            done < ../blackhole-vl/shlibs_remove
+          fi
+          if [ -f ../blackhole-vl/shlibs_append ]; then
+            cat ../blackhole-vl/shlibs_append >> common/shlibs
+          fi
+
+      - name: Bootstrap xbps-src
+        working-directory: void-packages
+        run: ./xbps-src binary-bootstrap
+
+      - name: Build packages
+        working-directory: void-packages
+        run: ./xbps-src pkg ${{ github.event.inputs.packages }}
+
+      - name: Generate repodata
+        run: |
+          mkdir -p repo/x86_64
+          cp void-packages/hostdir/binpkgs/*.xbps repo/x86_64/ 2>/dev/null || true
+          cp void-packages/hostdir/binpkgs/multilib/*.xbps repo/x86_64/ 2>/dev/null || true
+          xbps-rindex -a repo/x86_64/*.xbps
+
+      - name: Publish to repository-x86_64 branch
+        run: |
+          cd repo
+          git init -q
+          git checkout -b repository-x86_64
+          git -c user.name="github-actions[bot]" -c user.email="actions@github.com" \
+              add . && \
+              git -c user.name="github-actions[bot]" -c user.email="actions@github.com" \
+              commit -m "repo update $(date -u +%F)"
+          git push --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            repository-x86_64:repository-x86_64
