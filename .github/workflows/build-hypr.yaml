@@ -33,7 +33,12 @@ jobs:
         run: git clone --depth 1 https://github.com/void-linux/void-packages.git
 
       - name: Copy templates into void-packages
-        run: cp -r blackhole-vl/srcpkgs/* void-packages/srcpkgs/
+        run: |
+          for d in blackhole-vl/srcpkgs/*/; do
+            name=$(basename "$d")
+            rm -rf "void-packages/srcpkgs/$name"
+            cp -r "$d" "void-packages/srcpkgs/$name"
+          done
 
       - name: Apply shlibs changes
         run: |
