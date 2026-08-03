@@ -1,82 +1,67 @@
-name: Build repo x86_64
+name: Build i686 Repository for mesa etc..
 
 on:
   workflow_dispatch:
-    inputs:
-      packages:
-        description: 'Pacchetti da buildare (separati da spazio)'
-        required: true
-        default: 'hyprland'
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  build-i686:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/void-linux/void-glibc-full:latest
-      options: --privileged
 
     steps:
-      - name: Checkout blackhole-vl
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          path: blackhole-vl
 
-      - name: Update xbps and install git
+      - name: Build i686 (32-bit) drivers
         run: |
-          xbps-install -Suy xbps
-          xbps-install -Suy git base-devel
+          docker run --rm --privileged \
+            -v "$PWD":/workspace -w /workspace \
+            ghcr.io/void-linux/void-glibc-full \
+            sh -c '
+              set -e
 
-      - name: Clone void-packages
-        run: git clone --depth 1 https://github.com/void-linux/void-packages.git
+              xbps-install -Syu xbps
+              xbps-install -yu
+              xbps-install -y sudo bash git curl shadow
 
-      - name: Copy templates into void-packages
+              useradd -m builder
+              chown -R builder:builder /workspace
+
+              sudo -Hu builder ./xbps-src binary-bootstrap -a i686
+
+              sudo -Hu builder ./xbps-src pkg -a i686 libdrm
+              sudo -Hu builder ./xbps-src pkg -a i686 mesa
+              sudo -Hu builder ./xbps-src pkg -a i686 xf86-video-amdgpu
+            '
+
+      - name: Create i686 repository
         run: |
-          for d in blackhole-vl/srcpkgs/*/; do
-            name=$(basename "$d")
-            rm -rf "void-packages/srcpkgs/$name"
-            cp -r "$d" "void-packages/srcpkgs/$name"
-          done
+          mkdir -p repo/i686
 
-      - name: Apply shlibs changes
+      - name: Copy i686 packages
         run: |
-          cd void-packages
-          if [ -f ../blackhole-vl/shlibs_remove ]; then
-            while IFS= read -r line; do
-              [ -z "$line" ] && continue
-              sed -i "\|^${line}\$|d" common/shlibs
-            done < ../blackhole-vl/shlibs_remove
+          find hostdir/binpkgs/i686 -maxdepth 1 -name "*.xbps" -exec cp -n {} repo/i686/ \;
+
+      - name: Index i686 repository
+        run: |
+          docker run --rm \
+            -v "$PWD/repo/i686":/repo \
+            ghcr.io/void-linux/void-glibc-full \
+            sh -c 'xbps-rindex -a /repo/*.xbps'
+
+      - name: Commit updated repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add repo/i686
+
+          if git diff --cached --quiet; then
+            echo "Nessuna modifica."
+            exit 0
           fi
-          if [ -f ../blackhole-vl/shlibs_append ]; then
-            cat ../blackhole-vl/shlibs_append >> common/shlibs
-          fi
 
-      - name: Bootstrap xbps-src
-        working-directory: void-packages
-        run: ./xbps-src binary-bootstrap
-
-      - name: Build packages
-        working-directory: void-packages
-        run: ./xbps-src pkg ${{ github.event.inputs.packages }}
-
-      - name: Generate repodata
-        run: |
-          mkdir -p repo/x86_64
-          cp void-packages/hostdir/binpkgs/*.xbps repo/x86_64/ 2>/dev/null || true
-          cp void-packages/hostdir/binpkgs/multilib/*.xbps repo/x86_64/ 2>/dev/null || true
-          xbps-rindex -a repo/x86_64/*.xbps
-
-      - name: Publish to repository-x86_64 branch
-        run: |
-          cd repo
-          git init -q
-          git checkout -b repository-x86_64
-          git -c user.name="github-actions[bot]" -c user.email="actions@github.com" \
-              add . && \
-              git -c user.name="github-actions[bot]" -c user.email="actions@github.com" \
-              commit -m "repo update $(date -u +%F)"
-          git push --force \
-            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
-            repository-x86_64:repository-x86_64
+          git commit -m "Add i686 packages"
+          git push
