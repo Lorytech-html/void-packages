@@ -1,4 +1,4 @@
-name: Build i686 Repository for mesa etc..
+name: Build i686 Repository for mesa etc.
 
 on:
   workflow_dispatch:
@@ -17,26 +17,58 @@ jobs:
       - name: Build i686 (32-bit) drivers
         run: |
           docker run --rm --privileged \
-            -v "$PWD":/workspace -w /workspace \
+            -v "$PWD":/workspace \
+            -w /workspace \
             ghcr.io/void-linux/void-glibc-full \
             sh -c '
-              set -e
+              set -ex
 
               xbps-install -Syu xbps
               xbps-install -yu
               xbps-install -y sudo bash git curl shadow
-              
+
+              mkdir -p etc
+
+              cat > etc/conf <<EOF
               XBPS_CHROOT_CMD=ethereal
               XBPS_ALLOW_CHROOT_BREAKOUT=yes
+              EOF
+
+              echo "===== etc/conf ====="
+              cat etc/conf
 
               useradd -m builder
               chown -R builder:builder /workspace
 
+              echo "===== binary-bootstrap ====="
               sudo -Hu builder ./xbps-src binary-bootstrap -a i686
 
+              echo "===== masterdir ====="
+              ls -lah masterdir || true
+
+              echo "===== masterdir/i686 ====="
+              ls -lah masterdir/i686 || true
+
+              echo "===== hostdir ====="
+              ls -lah hostdir || true
+
+              echo "===== hostdir/binpkgs ====="
+              ls -lah hostdir/binpkgs || true
+
+              echo "===== hostdir/binpkgs/i686 ====="
+              ls -lah hostdir/binpkgs/i686 || true
+
+              echo "===== Build libdrm ====="
               sudo -Hu builder ./xbps-src pkg -a i686 libdrm
+
+              echo "===== Build mesa ====="
               sudo -Hu builder ./xbps-src pkg -a i686 mesa
+
+              echo "===== Build xf86-video-amdgpu ====="
               sudo -Hu builder ./xbps-src pkg -a i686 xf86-video-amdgpu
+
+              echo "===== Final packages ====="
+              ls -lah hostdir/binpkgs/i686 || true
             '
 
       - name: Create i686 repository
@@ -45,7 +77,7 @@ jobs:
 
       - name: Copy i686 packages
         run: |
-          find hostdir/binpkgs/i686 -maxdepth 1 -name "*.xbps" -exec cp -n {} repo/i686/ \;
+          cp -vn hostdir/binpkgs/i686/*.xbps repo/i686/ || true
 
       - name: Index i686 repository
         run: |
@@ -62,7 +94,7 @@ jobs:
           git add repo/i686
 
           if git diff --cached --quiet; then
-            echo "No edits"
+            echo "No changes."
             exit 0
           fi
 
