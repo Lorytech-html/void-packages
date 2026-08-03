@@ -25,8 +25,9 @@ jobs:
               xbps-install -Syu xbps
               xbps-install -yu
               xbps-install -y sudo bash git curl shadow
-
-              export XBPS_ALLOW_CHROOT_BREAKOUT=yes
+              
+              XBPS_CHROOT_CMD=ethereal
+              XBPS_ALLOW_CHROOT_BREAKOUT=yes
 
               useradd -m builder
               chown -R builder:builder /workspace
