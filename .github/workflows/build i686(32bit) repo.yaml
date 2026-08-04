@@ -1,22 +1,20 @@
-name: build-ps4-drivers-i686
+name: Debug xbps-src
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  build:
+  debug:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-      - name: Build i686 drivers in Void container
+      - name: Debug xbps-src
         run: |
           docker run --rm --privileged \
             -v "$PWD":/workspace \
@@ -32,56 +30,34 @@ jobs:
               useradd -m builder
               chown -R builder:builder /workspace
 
-              sudo -Hu builder ./xbps-src binary-bootstrap -a i686
+              echo "===== Repository ====="
+              pwd
+              ls -lah
+              ls -lah etc || true
 
-              sudo -Hu builder ./xbps-src pkg -a i686 libdrm
+              echo "===== xbps-src version ====="
+              sudo -Hu builder ./xbps-src --version || true
 
-              sudo -Hu builder ./xbps-src pkg -a i686 xf86-video-amdgpu || {
-                echo "=== PATCH REJECTS ==="
-                find / -name "*.rej" 2>/dev/null | while read -r f; do
-                  echo "--- $f ---"
-                  cat "$f"
-                done
-                exit 1
-              }
+              echo "===== xbps-src help ====="
+              sudo -Hu builder ./xbps-src -h || true
 
-              sudo -Hu builder ./xbps-src pkg -a i686 mesa
+              echo "===== xbps-src help binary-bootstrap ====="
+              sudo -Hu builder ./xbps-src binary-bootstrap -h || true
+
+              echo "===== Testing binary-bootstrap ====="
+              sudo -Hu builder ./xbps-src binary-bootstrap || true
+
+              echo "===== masterdir ====="
+              ls -lah masterdir || true
+
+              echo "===== masterdir contents ====="
+              find masterdir -maxdepth 2 || true
+
+              echo "===== hostdir ====="
+              ls -lah hostdir || true
+
+              echo "===== hostdir/binpkgs ====="
+              find hostdir/binpkgs -maxdepth 2 || true
+
+              echo "===== Done ====="
             '
-
-      - name: Create i686 repository
-        run: |
-          mkdir -p repo/i686
-
-      - name: Copy packages and signatures
-        run: |
-          find hostdir/binpkgs/i686 -maxdepth 1 \( -name "*.xbps" -o -name "*.sig2" \) -exec cp -n {} repo/i686/ \;
-
-      - name: Index i686 repository
-        run: |
-          docker run --rm \
-            -v "$PWD/repo/i686":/repo \
-            ghcr.io/void-linux/void-glibc-full \
-            sh -c 'xbps-rindex -a /repo/*.xbps'
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps4-drivers-i686
-          path: |
-            hostdir/binpkgs/i686/**/*.xbps
-            hostdir/binpkgs/i686/**/*.sig2
-
-      - name: Commit repository
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add -f repo/i686
-
-          if git diff --cached --quiet; then
-            echo "No repository changes."
-            exit 0
-          fi
-
-          git commit -m "Add i686 packages"
-          git push
