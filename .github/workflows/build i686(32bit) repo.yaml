@@ -18,7 +18,7 @@ jobs:
             sh -c '
               xbps-install -Syu xbps &&
               xbps-install -yu &&
-              xbps-install -y sudo bash git curl shadow &&
+              xbps-install -y sudo bash git curl &&
               useradd -m builder &&
               chown -R builder:builder /workspace &&
               sudo -Hu builder ./xbps-src binary-bootstrap &&
