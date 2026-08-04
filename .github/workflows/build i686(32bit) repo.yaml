@@ -1,43 +1,87 @@
-name: Build Void Packages
+name: build-ps4-drivers-i686
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  build-packages:
+  build:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/void-linux/void-glibc-full
-      options: --privileged
-    env:
-      XBPS_ALLOW_CHROOT_BREAK: 1
 
     steps:
-      - name: Update system and install dependencies
+      - uses: actions/checkout@v4
+
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Build i686 drivers in Void container
         run: |
-          xbps-install -Syu xbps
-          xbps-install -yu
-          xbps-install -y bash git curl tar xz
+          docker run --rm --privileged \
+            -v "$PWD":/workspace \
+            -w /workspace \
+            ghcr.io/void-linux/void-glibc-full \
+            sh -c '
+              set -ex
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
+              xbps-install -Syu xbps
+              xbps-install -yu
+              xbps-install -y sudo bash git curl shadow
 
-      - name: Initialize xbps-src bootstrap
+              useradd -m builder
+              chown -R builder:builder /workspace
+
+              sudo -Hu builder ./xbps-src binary-bootstrap -a i686
+
+              sudo -Hu builder ./xbps-src pkg -a i686 libdrm
+
+              sudo -Hu builder ./xbps-src pkg -a i686 xf86-video-amdgpu || {
+                echo "=== PATCH REJECTS ==="
+                find / -name "*.rej" 2>/dev/null | while read -r f; do
+                  echo "--- $f ---"
+                  cat "$f"
+                done
+                exit 1
+              }
+
+              sudo -Hu builder ./xbps-src pkg -a i686 mesa
+            '
+
+      - name: Create i686 repository
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          ./xbps-src binary-bootstrap
+          mkdir -p repo/i686
 
-      - name: Build packages (i686)
+      - name: Copy packages and signatures
         run: |
-          ./xbps-src -a i686 pkg libdrm
-          ./xbps-src -a i686 pkg mesa
-          ./xbps-src -a i686 pkg xf86-video-amdgpu
+          find hostdir/binpkgs/i686 -maxdepth 1 \( -name "*.xbps" -o -name "*.sig2" \) -exec cp -n {} repo/i686/ \;
 
-      - name: Upload compiled packages as artifacts
+      - name: Index i686 repository
+        run: |
+          docker run --rm \
+            -v "$PWD/repo/i686":/repo \
+            ghcr.io/void-linux/void-glibc-full \
+            sh -c 'xbps-rindex -a /repo/*.xbps'
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: void-packages-i686
-          path: hostdir/binpkgs
+          name: ps4-drivers-i686
+          path: |
+            hostdir/binpkgs/i686/**/*.xbps
+            hostdir/binpkgs/i686/**/*.sig2
+
+      - name: Commit repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -f repo/i686
+
+          if git diff --cached --quiet; then
+            echo "No repository changes."
+            exit 0
+          fi
+
+          git commit -m "Add i686 packages"
+          git push
