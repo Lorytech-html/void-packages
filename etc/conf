@@ -1,3 +1,0 @@
-XBPS_CHROOT_CMD=ethereal
-XBPS_ALLOW_CHROOT_BREAKOUT=yes
-XBPS_DISTFILES_MIRROR="https://sources.voidlinux.org/"
