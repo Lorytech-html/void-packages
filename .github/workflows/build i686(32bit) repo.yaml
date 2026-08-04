@@ -11,8 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -33,13 +32,10 @@ jobs:
               useradd -m builder
               chown -R builder:builder /workspace
 
-              echo "===== Bootstrap ====="
-              sudo -Hu builder ./xbps-src -A i686 binary-bootstrap
+              sudo -Hu builder ./xbps-src binary-bootstrap
 
-              echo "===== Build libdrm ====="
               sudo -Hu builder ./xbps-src -A i686 pkg libdrm
 
-              echo "===== Build xf86-video-amdgpu ====="
               sudo -Hu builder ./xbps-src -A i686 pkg xf86-video-amdgpu || {
                 echo "=== PATCH REJECTS ==="
                 find / -name "*.rej" 2>/dev/null | while read -r f; do
@@ -49,12 +45,37 @@ jobs:
                 exit 1
               }
 
-              echo "===== Build mesa ====="
               sudo -Hu builder ./xbps-src -A i686 pkg mesa
 
-              echo "===== Produced packages ====="
               find hostdir/binpkgs -type f \( -name "*.xbps" -o -name "*.sig2" \)
+
+              chown -R root:root /workspace
             '
+
+      - name: Upload i686 packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: i686-packages
+          path: |
+            hostdir/binpkgs/**/*.xbps
+            hostdir/binpkgs/**/*.sig2
+          if-no-files-found: error
+
+  repository:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download built packages
+        uses: actions/download-artifact@v4
+        with:
+          name: i686-packages
+          path: artifact
 
       - name: Create i686 repository
         run: |
@@ -62,10 +83,10 @@ jobs:
 
       - name: Copy packages
         run: |
-          find hostdir/binpkgs -type f \( -name "*.xbps" -o -name "*.sig2" \) \
+          find artifact -type f \( -name "*.xbps" -o -name "*.sig2" \) \
             -exec cp -n {} repo/i686/ \;
 
-      - name: Index i686 repository
+      - name: Generate repository index
         run: |
           docker run --rm \
             -v "$PWD/repo/i686":/repo \
@@ -74,15 +95,11 @@ jobs:
               xbps-rindex -a /repo/*.xbps
             '
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps4-drivers-i686
-          path: |
-            hostdir/binpkgs/**/*.xbps
-            hostdir/binpkgs/**/*.sig2
+      - name: Show repository contents
+        run: |
+          ls -lah repo/i686
 
-      - name: Commit updated repository
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
