@@ -1,116 +1,86 @@
-name: Build and Publish i686 Repository
+name: Import and Sign i686 Repository
 
 on:
   workflow_dispatch:
     inputs:
       zip_url:
-        description: Link diretto allo zip
+        description: "Direct URL of the ZIP containing the compiled .xbps packages"
         required: true
         type: string
-        
+
 permissions:
   contents: write
 
 jobs:
-  build:
+  import:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Allow unprivileged user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      - name: Build in Void container
+      - name: Download xbps static tools
         run: |
-          docker run --rm --privileged \
-            -v "$PWD":/workspace \
-            -w /workspace \
-            ghcr.io/void-linux/void-glibc-full \
-            sh -euxc '
-              xbps-install -Syu xbps
-              xbps-install -yu
-              xbps-install -y sudo bash git curl shadow
+          curl -L \
+            https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz \
+            -o xbps-static.tar.xz
 
-              useradd -m builder
-              chown -R builder:builder /workspace
+          mkdir xbps-static
+          tar -xf xbps-static.tar.xz -C xbps-static
 
-              sudo -Hu builder ./xbps-src binary-bootstrap -a i686
-
-              sudo -Hu builder ./xbps-src pkg -a i686 libdrm
-
-              sudo -Hu builder ./xbps-src pkg -a i686 xf86-video-amdgpu
-
-              sudo -Hu builder ./xbps-src pkg -a i686 mesa
-            '
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: i686-packages
-          path: hostdir/binpkgs
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: i686-packages
-          path: artifact
-
-      - name: Install xbps tools
+      - name: Download ZIP
         run: |
-          docker run --rm \
-            -v "$PWD":/work \
-            -w /work \
-            ghcr.io/void-linux/void-glibc-full \
-            sh -c '
-              xbps-install -Sy xbps
-            '
+          curl -L "${{ github.event.inputs.zip_url }}" -o packages.zip
+
+      - name: Prepare repository
+        run: |
+          mkdir -p repo/i686
+
+          unzip -o packages.zip -d extracted
+
+          find extracted -type f -name "*.xbps" -exec cp -f {} repo/i686/ \;
+          find extracted -type f -name "*.sig2" -exec cp -f {} repo/i686/ \;
+
+          rm -f repo/i686/*-repodata
+          rm -f repo/i686/*-repodata.sig
+          rm -f repo/i686/*-repodata.sig2
 
       - name: Restore signing key
         run: |
           echo "${{ secrets.REPO_SIGN_KEY }}" > privkey.pem
+          chmod 600 privkey.pem
 
-      - name: Copy packages
+      - name: Generate repository metadata
         run: |
-          mkdir -p repo/i686
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
 
-          find artifact -type f \( -name "*.xbps" -o -name "*.sig2" \) \
-            ! -name "rust-*.xbps" \
-            ! -name "rust-*.sig2" \
-            ! -name "rust-bootstrap-*.xbps" \
-            ! -name "rust-bootstrap-*.sig2" \
-            ! -name "cargo-*.xbps" \
-            ! -name "cargo-*.sig2" \
-            -exec cp {} repo/i686/ \;
+          xbps-rindex -a repo/i686/*.xbps
 
-      - name: Generate repository metadata and signatures
+      - name: Sign repository
         run: |
-          docker run --rm \
-            -v "$PWD/repo/i686":/repo \
-            -v "$PWD/privkey.pem":/privkey.pem \
-            ghcr.io/void-linux/void-glibc-full \
-            sh -euxc '
-              xbps-rindex -a /repo/*.xbps
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
 
-              xbps-rindex \
-                --sign \
-                --signedby "Lollo <you@example.com>" \
-                --privkey /privkey.pem \
-                /repo
+          xbps-rindex \
+            --sign \
+            --signedby "Lollo <you@example.com>" \
+            --privkey privkey.pem \
+            repo/i686
 
-              xbps-rindex \
-                --sign-pkg \
-                --privkey /privkey.pem \
-                /repo/*.xbps
-            '
+      - name: Sign packages
+        run: |
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
 
-      - name: Commit repository
+          xbps-rindex \
+            --sign-pkg \
+            --privkey privkey.pem \
+            repo/i686/*.xbps
+
+      - name: Cleanup
+        run: |
+          rm -f privkey.pem packages.zip
+          rm -rf extracted
+
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -123,4 +93,4 @@ jobs:
           fi
 
           git commit -m "Update signed i686 repository"
-          git push
+          git push origin master
