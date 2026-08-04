@@ -12,33 +12,29 @@ jobs:
     container:
       image: ghcr.io/void-linux/void-glibc-full
       options: --privileged
+    env:
+      XBPS_ALLOW_CHROOT_BREAK: 1
 
     steps:
       - name: Update system and install dependencies
         run: |
           xbps-install -Syu xbps
           xbps-install -yu
-          xbps-install -y sudo bash git curl
+          xbps-install -y bash git curl tar xz
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup builder user & permissions
-        run: |
-          useradd -m builder
-          chown -R builder:builder "$GITHUB_WORKSPACE"
-          git config --global --add safe.directory '*'
-          sudo -Hu builder git config --global --add safe.directory '*'
-
       - name: Initialize xbps-src bootstrap
         run: |
-          sudo -Hu builder ./xbps-src binary-bootstrap
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          ./xbps-src binary-bootstrap
 
       - name: Build packages (i686)
         run: |
-          sudo -Hu builder ./xbps-src -a i686 pkg libdrm
-          sudo -Hu builder ./xbps-src -a i686 pkg mesa
-          sudo -Hu builder ./xbps-src -a i686 pkg xf86-video-amdgpu
+          ./xbps-src -a i686 pkg libdrm
+          ./xbps-src -a i686 pkg mesa
+          ./xbps-src -a i686 pkg xf86-video-amdgpu
 
       - name: Upload compiled packages as artifacts
         uses: actions/upload-artifact@v4
