@@ -1,0 +1,2 @@
+XBPS_ALLOW_CHROOT_BREAKOUT=yes
+XBPS_DISTFILES_MIRROR="https://sources.voidlinux.org/"
