@@ -44,15 +44,12 @@ jobs:
       - name: Deploy packages to repo/i686
         run: |
           mkdir -p repo/i686
-          # Copia i pacchetti i686 e relativi indici esclusivamente in repo/i686
           cp -av hostdir/binpkgs/* repo/i686/
 
-          # Configura Git e aggiunge allo staging SOLTANTO il percorso repo/i686
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add repo/i686
 
-          # Esegue il commit e push solo se ci sono effettivi cambiamenti in repo/i686
           if ! git diff --cached --quiet; then
             git commit -m "build(i686): update packages in repo/i686"
             git push
