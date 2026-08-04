@@ -1,102 +1,59 @@
-name: Build i686 Repository for mesa etc.
-
-on:
-  workflow_dispatch:
+name: build-ps4-i686-repo
+on: workflow_dispatch
 
 permissions:
   contents: write
 
 jobs:
-  build-i686:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Build i686 (32-bit) drivers
+      - name: Build i686 drivers
         run: |
           docker run --rm --privileged \
-            -v "$PWD":/workspace \
-            -w /workspace \
+            -v "$PWD":/workspace -w /workspace \
             ghcr.io/void-linux/void-glibc-full \
             sh -c '
-              set -ex
-
-              xbps-install -Syu xbps
-              xbps-install -yu
-              xbps-install -y sudo bash git curl shadow
-
-              mkdir -p etc
-
-              cat > etc/conf <<EOF
-              XBPS_CHROOT_CMD=ethereal
-              XBPS_ALLOW_CHROOT_BREAKOUT=yes
-              EOF
-
-              echo "===== etc/conf ====="
-              cat etc/conf
-
-              useradd -m builder
-              chown -R builder:builder /workspace
-
-              echo "===== binary-bootstrap ====="
-              sudo -Hu builder ./xbps-src binary-bootstrap -a i686
-
-              echo "===== masterdir ====="
-              ls -lah masterdir || true
-
-              echo "===== masterdir/i686 ====="
-              ls -lah masterdir/i686 || true
-
-              echo "===== hostdir ====="
-              ls -lah hostdir || true
-
-              echo "===== hostdir/binpkgs ====="
-              ls -lah hostdir/binpkgs || true
-
-              echo "===== hostdir/binpkgs/i686 ====="
-              ls -lah hostdir/binpkgs/i686 || true
-
-              echo "===== Build libdrm ====="
-              sudo -Hu builder ./xbps-src pkg -a i686 libdrm
-
-              echo "===== Build mesa ====="
-              sudo -Hu builder ./xbps-src pkg -a i686 mesa
-
-              echo "===== Build xf86-video-amdgpu ====="
+              xbps-install -Syu xbps &&
+              xbps-install -yu &&
+              xbps-install -y sudo bash git curl shadow &&
+              useradd -m builder &&
+              chown -R builder:builder /workspace &&
+              sudo -Hu builder ./xbps-src binary-bootstrap -a i686 &&
+              sudo -Hu builder ./xbps-src pkg -a i686 libdrm &&
+              sudo -Hu builder ./xbps-src pkg -a i686 mesa &&
               sudo -Hu builder ./xbps-src pkg -a i686 xf86-video-amdgpu
-
-              echo "===== Final packages ====="
-              ls -lah hostdir/binpkgs/i686 || true
             '
 
-      - name: Create i686 repository
+      - name: Assemble repo/i686 (only this folder, nothing else touched)
         run: |
           mkdir -p repo/i686
+          find hostdir/binpkgs -maxdepth 1 -name '*.i686.xbps' -exec cp {} repo/i686/ \;
 
-      - name: Copy i686 packages
+      - name: Ensure signing key exists (reused across runs, never overwritten)
         run: |
-          cp -vn hostdir/binpkgs/i686/*.xbps repo/i686/ || true
-
-      - name: Index i686 repository
-        run: |
-          docker run --rm \
-            -v "$PWD/repo/i686":/repo \
-            ghcr.io/void-linux/void-glibc-full \
-            sh -c 'xbps-rindex -a /repo/*.xbps'
-
-      - name: Commit updated repository
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add -f repo/i686
-
-          if git diff --cached --quiet; then
-            echo "No changes."
-            exit 0
+          if [ ! -f repo/i686/privkey.pem ]; then
+            docker run --rm -v "$PWD/repo/i686":/repo \
+              ghcr.io/void-linux/void-glibc-full \
+              sh -c 'openssl genrsa -out /repo/privkey.pem 4096'
           fi
 
-          git commit -m "Add i686 packages"
+      - name: Generate index + sign (.xbps + .sig2)
+        run: |
+          docker run --rm -v "$PWD/repo/i686":/repo \
+            ghcr.io/void-linux/void-glibc-full \
+            sh -c '
+              xbps-rindex -a /repo/*.xbps &&
+              xbps-rindex --sign --signedby "Lollo PS4 i686 repo" --privkey /repo/privkey.pem /repo &&
+              xbps-rindex --sign-pkg --privkey /repo/privkey.pem /repo/*.xbps
+            '
+
+      - name: Commit ONLY repo/i686, leave everything else untouched
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add repo/i686
+          git commit -m "update ps4 i686 driver repo" || echo "nothing to commit"
           git push
