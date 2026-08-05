@@ -35,6 +35,8 @@ jobs:
         run: |
           set -eux
 
+          rm -rf repo/i686/*
+
           mkdir -p repo/i686
 
           unzip -o packages.zip -d extracted
@@ -44,7 +46,6 @@ jobs:
           find extracted -path '*/multilib/*' -type f -name '*.xbps.sig2' -exec cp {} repo/i686/ \;
           echo "Removing old repodata..."
           
-          rm -rf repo/i686/*
           rm -f repo/i686/*repodata*
           rm -f repo/i686/index*
           rm -f repo/i686/*.plist
