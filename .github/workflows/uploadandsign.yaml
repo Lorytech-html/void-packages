@@ -76,12 +76,12 @@ jobs:
       - name: Generate repository metadata
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          xbps-rindex -a "$GITHUB_WORKSPACE/repo/i686"/*.xbps
+          XBPS_TARGET_ARCH=i686 xbps-rindex -a "$GITHUB_WORKSPACE/repo/i686"/*.xbps
 
       - name: Sign repository
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          xbps-rindex \
+          XBPS_TARGET_ARCH=i686 xbps-rindex \
             --sign \
             --signedby "Lollo PS4" \
             --privkey "$GITHUB_WORKSPACE/privkey.pem" \
@@ -90,7 +90,7 @@ jobs:
       - name: Sign packages
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          xbps-rindex \
+          XBPS_TARGET_ARCH=i686 xbps-rindex \
             --sign-pkg \
             --privkey "$GITHUB_WORKSPACE/privkey.pem" \
             "$GITHUB_WORKSPACE/repo/i686"/*.xbps
