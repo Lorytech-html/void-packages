@@ -79,7 +79,7 @@ jobs:
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
 
-          xbps-rindex -a repo/i686/*.xbps
+          XBPS_TARGET_ARCH=i686 xbps-rindex -a ./*.xbps
 
       - name: Sign repository
         run: |
@@ -87,7 +87,7 @@ jobs:
 
           xbps-rindex \
             --sign \
-            --signedby "Lollo <you@example.com>" \
+            --signedby "lore <loresigned@example.com>" \
             --privkey privkey.pem \
             repo/i686
 
