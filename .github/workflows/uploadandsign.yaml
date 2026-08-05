@@ -39,31 +39,14 @@ jobs:
 
           unzip -o packages.zip -d extracted
 
-          find extracted -type f -name '*.i686.xbps' -exec cp {} repo/i686/ \;
-          find extracted -type f -name '*.i686.xbps.sig2' -exec cp {} repo/i686/ \;
-
+          echo "Copying only mesa-32bit and libdrm-32bit from the multilib folder..."
+          find extracted -path '*/multilib/*' -type f -name '*.xbps' -exec cp {} repo/i686/ \;
+          find extracted -path '*/multilib/*' -type f -name '*.xbps.sig2' -exec cp {} repo/i686/ \;
           echo "Removing old repodata..."
+
           rm -f repo/i686/*repodata*
           rm -f repo/i686/index*
           rm -f repo/i686/*.plist
-
-          echo "Removing oversized Rust packages..."
-          find repo/i686 -type f \( \
-            -name 'rust-*.xbps' -o \
-            -name 'rust-*.xbps.sig2' -o \
-            -name 'rust-bootstrap-*.xbps' -o \
-            -name 'rust-bootstrap-*.xbps.sig2' -o \
-            -name 'rust-std-*.xbps' -o \
-            -name 'rust-std-*.xbps.sig2' -o \
-            -name 'rust-src-*.xbps' -o \
-            -name 'rust-src-*.xbps.sig2' -o \
-            -name 'rust-doc-*.xbps' -o \
-            -name 'rust-doc-*.xbps.sig2' -o \
-            -name 'cargo-*.xbps' -o \
-            -name 'cargo-*.xbps.sig2' -o \
-            -name 'cargo-bootstrap-*.xbps' -o \
-            -name 'cargo-bootstrap-*.xbps.sig2' \
-          \) -delete
 
           echo "Remaining packages:"
           ls -lh repo/i686
@@ -76,12 +59,12 @@ jobs:
       - name: Generate repository metadata
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          XBPS_TARGET_ARCH=i686 xbps-rindex -a "$GITHUB_WORKSPACE/repo/i686"/*.xbps
+          xbps-rindex -a "$GITHUB_WORKSPACE/repo/i686"/*.xbps
 
       - name: Sign repository
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          XBPS_TARGET_ARCH=i686 xbps-rindex \
+          xbps-rindex \
             --sign \
             --signedby "Lollo PS4" \
             --privkey "$GITHUB_WORKSPACE/privkey.pem" \
@@ -90,7 +73,7 @@ jobs:
       - name: Sign packages
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          XBPS_TARGET_ARCH=i686 xbps-rindex \
+          xbps-rindex \
             --sign-pkg \
             --privkey "$GITHUB_WORKSPACE/privkey.pem" \
             "$GITHUB_WORKSPACE/repo/i686"/*.xbps
