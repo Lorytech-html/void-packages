@@ -43,7 +43,6 @@ jobs:
           find extracted -type f -name '*.i686.xbps' -exec cp {} repo/i686/ \;
           find extracted -type f -name '*.i686.xbps.sig2' -exec cp {} repo/i686/ \;
 
-
           echo "Removing old repodata..."
           rm -f repo/i686/*repodata*
           rm -f repo/i686/index*
