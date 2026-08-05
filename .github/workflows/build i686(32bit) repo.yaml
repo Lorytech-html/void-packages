@@ -1,4 +1,4 @@
-name: build-ps4-drivers-i686
+name: build-ps4-drivers-32bit
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-      - name: Build i686 drivers in Void container
+      - name: Build 32bit drivers in Void container
         run: |
           docker run --rm --privileged \
             -v "$PWD":/workspace \
@@ -52,14 +52,15 @@ jobs:
               chown -R root:root /workspace
             '
 
-      - name: Upload i686 packages
+      - name: Upload 32bit packages
         uses: actions/upload-artifact@v4
         with:
-          name: i686-packages
+          name: x86_64-32bit-packages
           path: |
             hostdir/binpkgs/**/*.xbps
             hostdir/binpkgs/**/*.sig2
           if-no-files-found: error
+
 
   repository:
     needs: build
@@ -69,47 +70,110 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Download built packages
+
+      - name: Download xbps static tools
+        run: |
+          curl -L \
+            https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz \
+            -o xbps-static.tar.xz
+          mkdir xbps-static
+          tar -xf xbps-static.tar.xz -C xbps-static
+
+
+      - name: Download compiled packages
         uses: actions/download-artifact@v4
         with:
-          name: i686-packages
-          path: artifact
+          name: x86_64-32bit-packages
+          path: extracted
 
-      - name: Create i686 repository
-        run: |
-          mkdir -p repo/i686
 
-      - name: Copy packages
+      - name: Prepare repository
         run: |
-          find artifact -type f \( -name "*.xbps" -o -name "*.sig2" \) \
-            -exec cp -n {} repo/i686/ \;
+          set -eux
 
-      - name: Generate repository index
-        run: |
-          docker run --rm \
-            -v "$PWD/repo/i686":/repo \
-            ghcr.io/void-linux/void-glibc-full \
-            sh -c '
-              xbps-rindex -a /repo/*.xbps
-            '
+          mkdir -p repo/x86_64
 
-      - name: Show repository contents
+          find extracted -type f -name '*.xbps' -exec cp {} repo/x86_64/ \;
+          find extracted -type f -name '*.xbps.sig2' -exec cp {} repo/x86_64/ \;
+
+          echo "Removing old repodata..."
+          rm -f repo/x86_64/*repodata*
+          rm -f repo/x86_64/index*
+          rm -f repo/x86_64/*.plist
+
+          echo "Removing oversized Rust packages..."
+          find repo/x86_64 -type f \( \
+            -name 'rust-*.xbps' -o \
+            -name 'rust-*.xbps.sig2' -o \
+            -name 'rust-bootstrap-*.xbps' -o \
+            -name 'rust-bootstrap-*.xbps.sig2' -o \
+            -name 'rust-std-*.xbps' -o \
+            -name 'rust-std-*.xbps.sig2' -o \
+            -name 'rust-src-*.xbps' -o \
+            -name 'rust-src-*.xbps.sig2' -o \
+            -name 'rust-doc-*.xbps' -o \
+            -name 'rust-doc-*.xbps.sig2' -o \
+            -name 'cargo-*.xbps' -o \
+            -name 'cargo-*.xbps.sig2' -o \
+            -name 'cargo-bootstrap-*.xbps' -o \
+            -name 'cargo-bootstrap-*.xbps.sig2' \
+          \) -delete
+
+          echo "Remaining packages:"
+          ls -lh repo/x86_64
+
+
+      - name: Restore signing key
         run: |
-          ls -lah repo/i686
+          echo "${{ secrets.REPO_SIGN_KEY }}" > "$GITHUB_WORKSPACE/privkey.pem"
+          chmod 600 "$GITHUB_WORKSPACE/privkey.pem"
+
+
+      - name: Generate repository metadata
+        run: |
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
+          xbps-rindex -a "$GITHUB_WORKSPACE/repo/x86_64"/*.xbps
+
+
+      - name: Sign repository
+        run: |
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
+          xbps-rindex \
+            --sign \
+            --signedby "Lollo PS4" \
+            --privkey "$GITHUB_WORKSPACE/privkey.pem" \
+            "$GITHUB_WORKSPACE/repo/x86_64"
+
+
+      - name: Sign packages
+        run: |
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
+          xbps-rindex \
+            --sign-pkg \
+            --privkey "$GITHUB_WORKSPACE/privkey.pem" \
+            "$GITHUB_WORKSPACE/repo/x86_64"/*.xbps
+
+
+      - name: Cleanup
+        run: |
+          rm -f "$GITHUB_WORKSPACE/privkey.pem"
+          rm -rf extracted xbps-static xbps-static.tar.xz
+
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add -f repo/i686
+          git add -f repo/x86_64
 
           if git diff --cached --quiet; then
-            echo "No changes."
+            echo "Nothing to commit."
             exit 0
           fi
 
-          git commit -m "Add i686 packages"
-          git push
+          git commit -m "Update signed x86_64 multilib repository"
+          git push origin HEAD
