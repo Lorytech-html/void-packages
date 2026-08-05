@@ -38,7 +38,7 @@ jobs:
 
           mkdir -p repo/i686
 
-          unzip -o downloaded.zip -d extracted
+          unzip -o packages.zip -d extracted
 
           find extracted -type f -name '*.xbps' -exec cp {} repo/i686/ \;
           find extracted -type f -name '*.sig2' -exec cp {} repo/i686/ \;
