@@ -34,16 +34,40 @@ jobs:
 
       - name: Prepare repository
         run: |
+          set -eux
+
           mkdir -p repo/i686
 
-          unzip -o packages.zip -d extracted
+          unzip -o downloaded.zip -d extracted
 
-          find extracted -type f -name "*.xbps" -exec cp -f {} repo/i686/ \;
-          find extracted -type f -name "*.sig2" -exec cp -f {} repo/i686/ \;
+          find extracted -type f -name '*.xbps' -exec cp {} repo/i686/ \;
+          find extracted -type f -name '*.sig2' -exec cp {} repo/i686/ \;
 
-          rm -f repo/i686/*-repodata
-          rm -f repo/i686/*-repodata.sig
-          rm -f repo/i686/*-repodata.sig2
+          echo "Removing old repodata..."
+          rm -f repo/i686/*repodata*
+          rm -f repo/i686/index*
+          rm -f repo/i686/*.plist
+
+          echo "Removing oversized Rust packages..."
+          find repo/i686 -type f \( \
+            -name 'rust-*.xbps' -o \
+            -name 'rust-*.xbps.sig2' -o \
+            -name 'rust-bootstrap-*.xbps' -o \
+            -name 'rust-bootstrap-*.xbps.sig2' -o \
+            -name 'rust-std-*.xbps' -o \
+            -name 'rust-std-*.xbps.sig2' -o \
+            -name 'rust-src-*.xbps' -o \
+            -name 'rust-src-*.xbps.sig2' -o \
+            -name 'rust-doc-*.xbps' -o \
+            -name 'rust-doc-*.xbps.sig2' -o \
+            -name 'cargo-*.xbps' -o \
+            -name 'cargo-*.xbps.sig2' -o \
+            -name 'cargo-bootstrap-*.xbps' -o \
+            -name 'cargo-bootstrap-*.xbps.sig2' \
+          \) -delete
+
+          echo "Remaining packages:"
+          ls -lh repo/i686
 
       - name: Restore signing key
         run: |
