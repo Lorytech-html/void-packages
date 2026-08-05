@@ -21,34 +21,34 @@ jobs:
 
       - name: Download xbps static tools
         run: |
+          set -eux
+
           curl -L \
             https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz \
             -o xbps-static.tar.xz
 
-          mkdir xbps-static
+          mkdir -p xbps-static
           tar -xf xbps-static.tar.xz -C xbps-static
 
       - name: Download ZIP
         run: |
+          set -eux
           curl -L "${{ github.event.inputs.zip_url }}" -o packages.zip
 
       - name: Prepare repository
         run: |
           set -eux
 
+          rm -rf extracted
           mkdir -p repo/i686
 
           unzip -o packages.zip -d extracted
 
+          find repo/i686 -mindepth 1 -delete
+
           find extracted -type f -name '*.i686.xbps' -exec cp {} repo/i686/ \;
           find extracted -type f -name '*.i686.xbps.sig2' -exec cp {} repo/i686/ \;
 
-          echo "Removing old repodata..."
-          rm -f repo/i686/*repodata*
-          rm -f repo/i686/index*
-          rm -f repo/i686/*.plist
-
-          echo "Removing oversized Rust packages..."
           find repo/i686 -type f \( \
             -name 'rust-*.xbps' -o \
             -name 'rust-*.xbps.sig2' -o \
@@ -66,38 +66,60 @@ jobs:
             -name 'cargo-bootstrap-*.xbps.sig2' \
           \) -delete
 
-          echo "Remaining packages:"
-          ls -lh repo/i686
+          rm -f repo/i686/*repodata*
+          rm -f repo/i686/index*
+          rm -f repo/i686/*.plist
+
+          ls -lah repo/i686
 
       - name: Restore signing key
         run: |
-          echo "${{ secrets.REPO_SIGN_KEY }}" > privkey.pem
+          set -eux
+          printf "%s" "${{ secrets.REPO_SIGN_KEY }}" > privkey.pem
           chmod 600 privkey.pem
 
       - name: Generate repository metadata
         run: |
+          set -eux
+
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
 
-          XBPS_TARGET_ARCH=i686 xbps-rindex -a ./*.xbps
+          cd repo/i686
+
+          ls -lah
+
+          XBPS_TARGET_ARCH=i686 xbps-rindex -a *.xbps
+
+          ls -lah
 
       - name: Sign repository
         run: |
+          set -eux
+
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
+
+          cd repo/i686
 
           xbps-rindex \
             --sign \
             --signedby "lore <loresigned@example.com>" \
-            --privkey privkey.pem \
-            repo/i686
+            --privkey ../../privkey.pem \
+            .
 
       - name: Sign packages
         run: |
+          set -eux
+
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
 
-          xbps-rindex \
-            --sign-pkg \
-            --privkey privkey.pem \
-            repo/i686/*.xbps
+          cd repo/i686
+
+          for pkg in *.xbps; do
+            xbps-rindex \
+              --sign-pkg \
+              --privkey ../../privkey.pem \
+              "$pkg"
+          done
 
       - name: Cleanup
         run: |
@@ -106,6 +128,8 @@ jobs:
 
       - name: Commit and push
         run: |
+          set -eux
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
