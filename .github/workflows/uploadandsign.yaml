@@ -70,37 +70,34 @@ jobs:
 
       - name: Restore signing key
         run: |
-          echo "${{ secrets.REPO_SIGN_KEY }}" > privkey.pem
-          chmod 600 privkey.pem
+          echo "${{ secrets.REPO_SIGN_KEY }}" > "$GITHUB_WORKSPACE/privkey.pem"
+          chmod 600 "$GITHUB_WORKSPACE/privkey.pem"
 
       - name: Generate repository metadata
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          cd repo/i686
-          xbps-rindex -a *.xbps
+          xbps-rindex -a "$GITHUB_WORKSPACE/repo/i686"/*.xbps
 
       - name: Sign repository
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          cd repo/i686
           xbps-rindex \
             --sign \
             --signedby "Lollo PS4" \
             --privkey "$GITHUB_WORKSPACE/privkey.pem" \
-            .
+            "$GITHUB_WORKSPACE/repo/i686"
 
       - name: Sign packages
         run: |
           export PATH="$PWD/xbps-static/usr/bin:$PATH"
-          cd repo/i686
           xbps-rindex \
             --sign-pkg \
             --privkey "$GITHUB_WORKSPACE/privkey.pem" \
-            *.xbps
+            "$GITHUB_WORKSPACE/repo/i686"/*.xbps
 
       - name: Cleanup
         run: |
-          rm -f privkey.pem packages.zip
+          rm -f "$GITHUB_WORKSPACE/privkey.pem" packages.zip
           rm -rf extracted xbps-static xbps-static.tar.xz
 
       - name: Commit and push
