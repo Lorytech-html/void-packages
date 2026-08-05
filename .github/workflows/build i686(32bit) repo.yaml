@@ -34,9 +34,9 @@ jobs:
 
               sudo -Hu builder ./xbps-src binary-bootstrap
 
-              sudo -Hu builder ./xbps-src -A i686 pkg libdrm
+              sudo -Hu builder ./xbps-src pkg libdrm-32bit
 
-              sudo -Hu builder ./xbps-src -A i686 pkg xf86-video-amdgpu || {
+              sudo -Hu builder ./xbps-src pkg xf86-video-amdgpu-32bit || {
                 echo "=== PATCH REJECTS ==="
                 find / -name "*.rej" 2>/dev/null | while read -r f; do
                   echo "--- $f ---"
@@ -45,7 +45,7 @@ jobs:
                 exit 1
               }
 
-              sudo -Hu builder ./xbps-src -A i686 pkg mesa
+              sudo -Hu builder ./xbps-src pkg mesa-32bit
 
               find hostdir/binpkgs -type f \( -name "*.xbps" -o -name "*.sig2" \)
 
