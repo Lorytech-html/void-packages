@@ -30,24 +30,52 @@ jobs:
           mkdir -p xbps-static
           tar -xf xbps-static.tar.xz -C xbps-static
 
+          echo "=== XBPS STATIC CONTENTS ==="
+          find xbps-static -maxdepth 3 -type f | sort
+
       - name: Download ZIP
         run: |
           set -eux
-          curl -L "${{ github.event.inputs.zip_url }}" -o packages.zip
+
+          curl -L \
+            "${{ github.event.inputs.zip_url }}" \
+            -o packages.zip
+
+          echo "=== DOWNLOADED ZIP ==="
+          ls -lh packages.zip
+
+          echo "=== ZIP CONTENTS ==="
+          unzip -l packages.zip | head -n 200 || true
 
       - name: Prepare repository
         run: |
           set -eux
 
           rm -rf extracted
+          mkdir -p extracted
           mkdir -p repo/i686
+
+          echo "=== EXTRACTING ZIP ==="
 
           unzip -o packages.zip -d extracted
 
+          echo "=== CLEARING OLD REPOSITORY ==="
+
           find repo/i686 -mindepth 1 -delete
 
-          find extracted -type f -name '*.i686.xbps' -exec cp {} repo/i686/ \;
-          find extracted -type f -name '*.i686.xbps.sig2' -exec cp {} repo/i686/ \;
+          echo "=== COPYING ONLY i686 PACKAGES ==="
+
+          find extracted \
+            -type f \
+            -name '*.i686.xbps' \
+            -exec cp {} repo/i686/ \;
+
+          find extracted \
+            -type f \
+            -name '*.i686.xbps.sig2' \
+            -exec cp {} repo/i686/ \;
+
+          echo "=== REMOVING RUST / CARGO PACKAGES ==="
 
           find repo/i686 -type f \( \
             -name 'rust-*.xbps' -o \
@@ -66,19 +94,150 @@ jobs:
             -name 'cargo-bootstrap-*.xbps.sig2' \
           \) -delete
 
+          echo "=== REMOVING OLD METADATA ==="
+
           rm -f repo/i686/*repodata*
           rm -f repo/i686/index*
           rm -f repo/i686/*.plist
 
+          echo "=== FINAL REPOSITORY CONTENTS BEFORE INDEX ==="
+
           ls -lah repo/i686
+
+          echo "=== NUMBER OF XBPS PACKAGES ==="
+
+          find repo/i686 \
+            -maxdepth 1 \
+            -type f \
+            -name '*.xbps' \
+            | wc -l
+
+          echo "=== PACKAGE LIST ==="
+
+          find repo/i686 \
+            -maxdepth 1 \
+            -type f \
+            -name '*.xbps' \
+            -printf '%f\n' \
+            | sort
 
       - name: Restore signing key
         run: |
           set -eux
+
           printf "%s" "${{ secrets.REPO_SIGN_KEY }}" > privkey.pem
+
           chmod 600 privkey.pem
 
-      - name: Generate repository metadata
+          echo "=== SIGNING KEY INFO ==="
+
+          ls -lh privkey.pem
+
+          echo "Key restored successfully."
+
+      - name: Generate repository metadata DEBUG
+        run: |
+          set -eux
+
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
+
+          echo "================================"
+          echo "XBPS-RINDEX LOCATION"
+          echo "================================"
+
+          which xbps-rindex || true
+
+          echo "================================"
+          echo "XBPS-RINDEX VERSION"
+          echo "================================"
+
+          xbps-rindex --version || true
+
+          echo "================================"
+          echo "XBPS-RINDEX HELP"
+          echo "================================"
+
+          xbps-rindex --help || true
+
+          echo "================================"
+          echo "ENTERING REPOSITORY"
+          echo "================================"
+
+          cd repo/i686
+
+          echo "PWD:"
+
+          pwd
+
+          echo "================================"
+          echo "FILES BEFORE GENERATING REPODATA"
+          echo "================================"
+
+          ls -lah
+
+          echo "================================"
+          echo "XBPS FILES"
+          echo "================================"
+
+          ls -1 *.xbps || true
+
+          echo "================================"
+          echo "XBPS COUNT"
+          echo "================================"
+
+          find . \
+            -maxdepth 1 \
+            -type f \
+            -name '*.xbps' \
+            | wc -l
+
+          echo "================================"
+          echo "ARCHITECTURES FROM FILENAMES"
+          echo "================================"
+
+          find . \
+            -maxdepth 1 \
+            -type f \
+            -name '*.xbps' \
+            -printf '%f\n' \
+            | sort
+
+          echo "================================"
+          echo "GENERATING REPODATA"
+          echo "================================"
+
+          XBPS_TARGET_ARCH=i686 \
+            xbps-rindex -a *.xbps
+
+          echo "================================"
+          echo "REPODATA COMMAND FINISHED"
+          echo "================================"
+
+          echo "Files after xbps-rindex:"
+
+          ls -lah
+
+          echo "================================"
+          echo "SEARCHING FOR REPODATA"
+          echo "================================"
+
+          find . \
+            -maxdepth 1 \
+            -type f \
+            -print \
+            | sort
+
+          echo "================================"
+          echo "REPODATA FILES SPECIFICALLY"
+          echo "================================"
+
+          find . \
+            -maxdepth 1 \
+            -type f \
+            -name '*repodata*' \
+            -ls || true
+
+      - name: Verify repository metadata
         run: |
           set -eux
 
@@ -86,11 +245,31 @@ jobs:
 
           cd repo/i686
 
+          echo "================================"
+          echo "VERIFYING REPODATA EXISTS"
+          echo "================================"
+
           ls -lah
 
-          XBPS_TARGET_ARCH=i686 xbps-rindex -a *.xbps
+          REPODATA_COUNT="$(find . -maxdepth 1 -type f -name '*repodata*' | wc -l)"
 
-          ls -lah
+          echo "Repodata files found: $REPODATA_COUNT"
+
+          if [ "$REPODATA_COUNT" -eq 0 ]; then
+            echo "ERROR: xbps-rindex did not generate any repodata file."
+            echo
+            echo "Directory contents:"
+            ls -lah
+            exit 1
+          fi
+
+          echo "Repodata exists."
+
+          find . \
+            -maxdepth 1 \
+            -type f \
+            -name '*repodata*' \
+            -ls
 
       - name: Sign repository
         run: |
@@ -100,11 +279,27 @@ jobs:
 
           cd repo/i686
 
+          echo "================================"
+          echo "BEFORE REPOSITORY SIGNING"
+          echo "================================"
+
+          ls -lah
+
+          echo "================================"
+          echo "SIGNING REPOSITORY"
+          echo "================================"
+
           xbps-rindex \
             --sign \
             --signedby "lore <loresigned@example.com>" \
             --privkey ../../privkey.pem \
             .
+
+          echo "================================"
+          echo "AFTER REPOSITORY SIGNING"
+          echo "================================"
+
+          ls -lah
 
       - name: Sign packages
         run: |
@@ -114,17 +309,87 @@ jobs:
 
           cd repo/i686
 
+          echo "================================"
+          echo "SIGNING PACKAGES"
+          echo "================================"
+
           for pkg in *.xbps; do
+
+            echo "Signing: $pkg"
+
             xbps-rindex \
               --sign-pkg \
               --privkey ../../privkey.pem \
               "$pkg"
+
           done
+
+          echo "================================"
+          echo "AFTER PACKAGE SIGNING"
+          echo "================================"
+
+          ls -lah
+
+          echo "================================"
+          echo "SIGNATURE COUNT"
+          echo "================================"
+
+          find . \
+            -maxdepth 1 \
+            -type f \
+            -name '*.sig2' \
+            | wc -l
+
+      - name: Final repository DEBUG
+        run: |
+          set -eux
+
+          echo "================================"
+          echo "FINAL REPOSITORY"
+          echo "================================"
+
+          ls -lah repo/i686
+
+          echo "================================"
+          echo "FINAL FILE LIST"
+          echo "================================"
+
+          find repo/i686 \
+            -maxdepth 1 \
+            -type f \
+            -printf '%f\n' \
+            | sort
+
+          echo "================================"
+          echo "FILES BIGGER THAN 90 MB"
+          echo "================================"
+
+          find repo/i686 \
+            -maxdepth 1 \
+            -type f \
+            -size +90M \
+            -exec ls -lh {} \; || true
+
+          echo "================================"
+          echo "FILES BIGGER THAN 100 MB"
+          echo "================================"
+
+          find repo/i686 \
+            -maxdepth 1 \
+            -type f \
+            -size +100M \
+            -exec ls -lh {} \; || true
 
       - name: Cleanup
         run: |
-          rm -f privkey.pem packages.zip
+          set -eux
+
+          rm -f privkey.pem
+          rm -f packages.zip
+          rm -f xbps-static.tar.xz
+
           rm -rf extracted
+          rm -rf xbps-static
 
       - name: Commit and push
         run: |
@@ -135,10 +400,26 @@ jobs:
 
           git add -f repo/i686
 
+          echo "================================"
+          echo "GIT STATUS"
+          echo "================================"
+
+          git status
+
+          echo "================================"
+          echo "STAGED FILES"
+          echo "================================"
+
+          git diff \
+            --cached \
+            --name-status
+
           if git diff --cached --quiet; then
             echo "Nothing to commit."
             exit 0
           fi
 
-          git commit -m "Update signed i686 repository"
+          git commit \
+            -m "Update signed i686 repository"
+
           git push origin master
