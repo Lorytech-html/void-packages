@@ -40,8 +40,8 @@ jobs:
 
           unzip -o packages.zip -d extracted
 
-         find extracted -type f -name '*.i686.xbps' -exec cp {} repo/i686/ \;
-         find extracted -type f -name '*.i686.xbps.sig2' -exec cp {} repo/i686/ \;
+          find extracted -type f -name '*.i686.xbps' -exec cp {} repo/i686/ \;
+          find extracted -type f -name '*.i686.xbps.sig2' -exec cp {} repo/i686/ \;
 
 
           echo "Removing old repodata..."
