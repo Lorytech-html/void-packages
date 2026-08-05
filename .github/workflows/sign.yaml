@@ -1,0 +1,83 @@
+name: Rebuild and Sign i686 Repository
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download xbps static tools
+        run: |
+          curl -L \
+            https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz \
+            -o xbps-static.tar.xz
+          mkdir xbps-static
+          tar -xf xbps-static.tar.xz -C xbps-static
+
+      - name: Remove old repodata and signatures
+        run: |
+          rm -f repo/i686/*repodata*
+          rm -f repo/i686/*repodata*.sig2
+          rm -f repo/i686/index*
+          echo "Remaining files:"
+          ls -lh repo/i686
+
+      - name: Restore signing key
+        run: |
+          echo "${{ secrets.REPO_SIGN_KEY }}" > "$GITHUB_WORKSPACE/privkey.pem"
+          chmod 600 "$GITHUB_WORKSPACE/privkey.pem"
+
+      - name: Generate repository metadata
+        run: |
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
+          xbps-rindex -a "$GITHUB_WORKSPACE/repo/i686"/*.xbps
+
+      - name: Sign repository
+        run: |
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
+          xbps-rindex \
+            --sign \
+            --signedby "Lollo PS4" \
+            --privkey "$GITHUB_WORKSPACE/privkey.pem" \
+            "$GITHUB_WORKSPACE/repo/i686"
+
+      - name: Sign packages
+        run: |
+          export PATH="$PWD/xbps-static/usr/bin:$PATH"
+          xbps-rindex \
+            --sign-pkg \
+            --privkey "$GITHUB_WORKSPACE/privkey.pem" \
+            "$GITHUB_WORKSPACE/repo/i686"/*.xbps
+
+      - name: Verify output
+        run: |
+          echo "Final contents:"
+          ls -lh repo/i686
+
+      - name: Cleanup
+        run: |
+          rm -f "$GITHUB_WORKSPACE/privkey.pem"
+          rm -rf xbps-static xbps-static.tar.xz
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A repo/i686
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "Rebuild i686 repodata as x86_64-repodata"
+          git push origin HEAD
